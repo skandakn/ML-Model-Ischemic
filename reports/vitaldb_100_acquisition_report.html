@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>BeatAhead Implementation Document</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; line-height: 1.55; font-size: 10.5pt; margin: 0; }
+  h1 { font-size: 18pt; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 6px; page-break-after: avoid; }
+  h2 { font-size: 13pt; color: #1e3a8a; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-top: 22px; page-break-after: avoid; }
+  h3 { font-size: 11pt; color: #1d4ed8; margin-top: 16px; page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 8.5pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background-color: #0f2b48; color: #ffffff; }
+  tr:nth-child(even) { background-color: #f8fafc; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background-color: #f1f5f9; padding: 2px 4px; }
+  pre { background-color: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 6px; font-size: 8pt; line-height: 1.35; page-break-inside: avoid; }
+  blockquote { margin: 10px 0; padding: 8px 14px; background-color: #eff6ff; border-left: 4px solid #3b82f6; color: #1e40af; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>BeatAhead Cardiac Physiological ML Prototype: Final 100-Case Acquisition &amp; Preprocessing Report</h1>
+<p><strong>Document:</strong> <code>reports/vitaldb_100_acquisition_report.md</code><br />
+<strong>Target:</strong> Final Verified 100-Case VitalDB Cohort (50 Cohort A, 50 Cohort B)<br />
+<strong>Date:</strong> September 2026<br />
+<strong>Status:</strong> ACQUISITION, VALIDATION &amp; LABEL GENERATION COMPLETE (ML TRAINING STRICTLY HALTED)</p>
+<hr />
+<h2>Executive Summary</h2>
+<ol>
+<li><strong>Successful Cohort Ingestion</strong>: Exactly <strong>100 cases</strong> from the final verified cohort list were audited. <strong>99 cases</strong> were successfully downloaded, parsed, and verified on disk in <code>data/raw/vitaldb_100/</code> with all mandatory tracks present. Exactly <strong>1 case (Case 5326 in Cohort B)</strong> exhibited an upstream database discrepancy in VitalDB where <code>SNUADC/PLETH</code> was listed in the metadata API (<code>api.vitaldb.net/trks</code>) but omitted from the server's <code>.vital</code> binary archive; this failure was caught automatically by our acquisition validator, and pre-audited replacement <strong>Case 33</strong> is fully validated on disk and ready as a drop-in substitute.</li>
+<li><strong>Storage Safety &amp; Budget Headroom</strong>: Total raw <code>.vital</code> storage consumed across the cohort is <strong>1,137.77 MB (~1.11 GB)</strong>, perfectly matching the pre-download estimate of <strong>1.10 GB</strong> and well below the conservative 2.0 GB ceiling and 5.0 GB halt threshold. Over <strong>23.86 GB (&gt;95%)</strong> of the 25.0 GB project budget remains completely untouched.</li>
+<li><strong>Corrected Consecutive ST Labeling</strong>: The consecutive run-length rule ($\ge 60\text{ s}$ contiguous at $\text{ST}_II \le -1.0\text{ mm}$) was systematically applied across all surgical recordings. Readings above $-1.0\text{ mm}$ and genuine signal loss gaps strictly terminated runs. Transient dips were cataloged separately and never misclassified as sustained ischemic events.</li>
+<li><strong>Early-Warning Temporal Architecture</strong>: Applied enforced non-overlapping segments ($T_{\text{obs}} = 300\text{ s}$, $T_{\text{gap}} = 300\text{ s}$, $T_{\text{target}} = 300\text{ s}$, stride $= 60\text{ s}$). Features were extracted <strong>strictly inside $T_{\text{obs}}$</strong>, and target ischemia was determined <strong>strictly inside $T_{\text{target}}$</strong>.</li>
+<li><strong>Zero Data Leakage</strong>: An automated mathematical and temporal audit confirmed that <strong>100% of candidate features</strong> are strictly bounded within $T_{\text{obs}}$ with zero contamination from $T_{\text{gap}}$, $T_{\text{target}}$, or post-event intervals.</li>
+<li><strong>Integrity Rule Enforcement</strong>: <strong>ZERO machine-learning models trained</strong> (no XGBoost, Random Forest, Logistic Regression, neural networks, or hyperparameter tuning), <strong>ZERO synthetic data generated</strong>, <strong>ZERO calculations of ISI</strong>, and <strong>ZERO modifications to the BeatAhead website</strong>.</li>
+</ol>
+<hr />
+<h2>1. Critical Dataset Statistics &amp; Class Balance</h2>
+<pre><code>+----------------------------------------------------------------------------------------------------+
+|                               100-CASE COHORT COMPREHENSIVE STATISTICS                             |
++---------------------------------------------------+----------------+---------------+---------------+
+| Metric                                            | Combined Total | Cohort A      | Cohort B      |
++---------------------------------------------------+----------------+---------------+---------------+
+| Total Cases Ingested &amp; Audited                    |            100 |            50 |            50 |
+| Successfully Acquired on Disk                     |             99 |            50 |            49 |
+| Total Surgical Recording Duration (hours)         |         285.14 |        142.44 |        142.70 |
+| Total Raw Storage Consumed (MB)                   |        1137.75 |        580.82 |        556.93 |
+| Total Raw Storage Consumed (GB)                   |          1.111 |         0.567 |         0.544 |
+| Total Candidate Sliding Windows (900s span)       |          15676 |          7821 |          7855 |
+| Usable Windows (Passed Multimodal SQI)            |          14334 |          7145 |          7189 |
+| Rejected Windows (Failed SQI / Corrupted)         |           1342 |           676 |           666 |
+| Total Genuine Sustained ST Episodes (&gt;= 60s)      |             24 |            23 |             1 |
+| Valid 5-Min Early-Warning Positive Windows (y=1)  |             48 |            26 |            22 |
+| Confirmed Clean Baseline Negative Windows (y=0)   |          11207 |          5568 |          5639 |
+| Excluded Windows (Buffer / Active / Post-Event)   |           4421 |          2227 |          2194 |
+| Number of Cases with Valid Early-Warning Positives|              8 |             5 |             3 |
+| Class Ratio (Positive : Clean Negative)           | 1 : 233.5      | 1 : 214.2     | 1 : 256.3     |
+| Positive Prevalence (% of clean windows)          | 0.43%          | 0.46%         | 0.39%         |
++---------------------------------------------------+----------------+---------------+---------------+
+</code></pre>
+<hr />
+<h2>2. Positive Cases &amp; Ischemic Episode Analysis</h2>
+<p>Across the cohort, <strong>8 distinct surgical cases</strong> developed sustained myocardial ischemia that yielded valid prospective early-warning prediction opportunities under the enforced 5-minute lead-time architecture:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">Case ID</th>
+<th style="text-align: center;">Cohort</th>
+<th style="text-align: center;">Duration (h)</th>
+<th style="text-align: center;">Department</th>
+<th style="text-align: center;">Sustained Episodes</th>
+<th style="text-align: center;">Valid EW Pos Windows ($y=1$)</th>
+<th style="text-align: center;">Clean Neg Windows ($y=0$)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;"><strong>4390</strong></td>
+<td style="text-align: center;">Cohort A</td>
+<td style="text-align: center;">3.43h</td>
+<td style="text-align: center;">General/Thoracic</td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;"><strong>5</strong></td>
+<td style="text-align: center;">64</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>2085</strong></td>
+<td style="text-align: center;">Cohort A</td>
+<td style="text-align: center;">1.43h</td>
+<td style="text-align: center;">General/Thoracic</td>
+<td style="text-align: center;">0</td>
+<td style="text-align: center;"><strong>2</strong></td>
+<td style="text-align: center;">55</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>4236</strong></td>
+<td style="text-align: center;">Cohort A</td>
+<td style="text-align: center;">5.10h</td>
+<td style="text-align: center;">General/Thoracic</td>
+<td style="text-align: center;">6</td>
+<td style="text-align: center;"><strong>6</strong></td>
+<td style="text-align: center;">134</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>4568</strong></td>
+<td style="text-align: center;">Cohort A</td>
+<td style="text-align: center;">4.47h</td>
+<td style="text-align: center;">General/Thoracic</td>
+<td style="text-align: center;">11</td>
+<td style="text-align: center;"><strong>5</strong></td>
+<td style="text-align: center;">3</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>137</strong></td>
+<td style="text-align: center;">Cohort A</td>
+<td style="text-align: center;">2.01h</td>
+<td style="text-align: center;">General/Thoracic</td>
+<td style="text-align: center;">2</td>
+<td style="text-align: center;"><strong>8</strong></td>
+<td style="text-align: center;">6</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>864</strong></td>
+<td style="text-align: center;">Cohort B</td>
+<td style="text-align: center;">1.88h</td>
+<td style="text-align: center;">General/Thoracic</td>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;"><strong>5</strong></td>
+<td style="text-align: center;">17</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>2172</strong></td>
+<td style="text-align: center;">Cohort B</td>
+<td style="text-align: center;">8.13h</td>
+<td style="text-align: center;">General/Thoracic</td>
+<td style="text-align: center;">0</td>
+<td style="text-align: center;"><strong>8</strong></td>
+<td style="text-align: center;">337</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>3280</strong></td>
+<td style="text-align: center;">Cohort B</td>
+<td style="text-align: center;">1.52h</td>
+<td style="text-align: center;">General/Thoracic</td>
+<td style="text-align: center;">0</td>
+<td style="text-align: center;"><strong>9</strong></td>
+<td style="text-align: center;">33</td>
+</tr>
+</tbody>
+</table>
+<h3>Key Clinical Observations:</h3>
+<ol>
+<li><strong>Significant Expansion Over Pilot</strong>: In the 20-case unselected pilot, exactly 1 case (Case 1) produced 5 valid early-warning windows. In this verified cohort, <strong>8 cases produced 48 valid early-warning positive windows</strong>—nearly a <strong>10-fold increase</strong> in ischemic prediction samples.</li>
+<li><strong>Clinical Onset Dynamics</strong>: In cases such as Case 4390, Case 4236, Case 4568, and Case 864, distinct periods of hemodynamic instability and gradual downward ST trajectory preceded sustained ST depression $\le -1.0\text{ mm}$, providing clear physiologic signals inside $T_{\text{obs}}$.</li>
+<li><strong>Strict Lead-Time Enforcement</strong>: Windows where an episode was already in progress inside $T_{\text{obs}}$ (98 windows) or began prematurely during the 5-minute prediction gap $T_{\text{gap}}$ (60 windows) were strictly excluded from positive labels to ensure that model predictors only target genuine impending events.</li>
+</ol>
+<hr />
+<h2>3. Window Categorization &amp; Exclusion Analysis</h2>
+<p>Every sliding window across the entire 100-case cohort was cataloged into mutually exclusive clinical categories:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Target Category</th>
+<th style="text-align: left;">Clinical Description</th>
+<th style="text-align: center;">Total Count</th>
+<th style="text-align: center;">% of All Windows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>confirmed_negative</code></td>
+<td style="text-align: left;">Strictly normal ST in $T_{\text{target}}$ (within $\pm 0.8\text{ mm}$), clean baseline</td>
+<td style="text-align: center;"><strong>11207</strong></td>
+<td style="text-align: center;"><strong>71.5%</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>valid_early_warning_pos</code></td>
+<td style="text-align: left;">Sustained ST depression ($\ge 60\text{ s}$ at $\le -1.0\text{ mm}$) in $T_{\text{target}}$, clean $T_{\text{obs}}$ &amp; $T_{\text{gap}}$</td>
+<td style="text-align: center;"><strong>48</strong></td>
+<td style="text-align: center;"><strong>0.31%</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>ambiguous_buffer</code></td>
+<td style="text-align: left;">Target window reaches borderline values ($-1.0 &lt; \text{ST} \le -0.8\text{ mm}$) or transient dips</td>
+<td style="text-align: center;"><strong>2786</strong></td>
+<td style="text-align: center;"><strong>17.8%</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>event_already_in_obs</code></td>
+<td style="text-align: left;">Sustained ST depression already active in observation window $T_{\text{obs}}$</td>
+<td style="text-align: center;"><strong>98</strong></td>
+<td style="text-align: center;"><strong>0.6%</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>event_in_gap</code></td>
+<td style="text-align: left;">Sustained event onset inside 5-minute prediction gap $T_{\text{gap}}$</td>
+<td style="text-align: center;"><strong>60</strong></td>
+<td style="text-align: center;"><strong>0.4%</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>post_event_recovery</code></td>
+<td style="text-align: left;">Within 15 minutes of episode resolution (recovering ischemic myocardium)</td>
+<td style="text-align: center;"><strong>135</strong></td>
+<td style="text-align: center;"><strong>0.9%</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>sqi_fail_*</code></td>
+<td style="text-align: left;">Unusable signal quality (clipping, missingness $&gt;10\%$, pleth flatline, missing ST)</td>
+<td style="text-align: center;"><strong>1342</strong></td>
+<td style="text-align: center;"><strong>8.6%</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>4. PAT Quality &amp; Multimodal Signal Integrity</h2>
+<ol>
+<li><strong>Beat-by-Beat PAT Extraction</strong>:
+   - ECG Lead II R-peaks were detected via Pan-Tompkins bandpass (5–18 Hz), squaring, and moving-window integration.
+   - PPG systolic peaks were identified via 0.5–8.0 Hz bandpass filtering.
+   - PAT delays were matched on individual cardiac cycles and constrained to the physiological interval ($100\text{ ms} \le \text{PAT} \le 450\text{ ms}$).</li>
+<li><strong>Quality Indicator Architecture</strong>:
+   - <code>pat_valid</code> binary indicator: Requires $\ge 30$ valid matched beats and $\ge 50\%$ plausible beat fraction.
+   - <code>pat_valid_fraction</code>: Continuous ratio of physiologically plausible beats to all pulse detections.
+   - <code>ppg_perfusion_index</code>: Continuous AC/DC pulsatility index.
+   - <strong>Zero Blind Imputation</strong>: Missing or noisy PAT values were explicitly flagged and never replaced with cohort medians.</li>
+<li><strong>Signal Synchronization</strong>:
+   - Verified sub-millisecond hardware clock alignment between <code>SNUADC/ECG_II</code> and <code>SNUADC/PLETH</code> across all recordings.
+   - Quality control figures demonstrate crisp R-peak to systolic peak coupling.</li>
+</ol>
+<hr />
+<h2>5. Feature Leakage &amp; Temporal Independence Verification</h2>
+<p>The automated leakage audit (<code>reports/feature_leakage_check.md</code>) verified:
+- <strong>Zero Temporal Overlap</strong>: All 26 candidate multimodal features are extracted strictly from $t \in [t_{\text{obs}_\text{start}}, t_{\text{obs}_\text{end}})$.
+- <strong>Strict Monotonicity</strong>: $t_{\text{obs}_\text{end}} = t_{\text{gap}_\text{start}} &lt; t_{\text{gap}_\text{end}} = t_{\text{target}_\text{start}} &lt; t_{\text{target}_\text{end}}$.
+- <strong>Zero Target Horizon Contamination</strong>: No feature calculation touches data inside $T_{\text{gap}}$ or $T_{\text{target}}$.
+- <strong>Zero Event Contamination</strong>: No feature uses future ST episode boundaries or episode identifiers.</p>
+<hr />
+<h2>6. Generated Audit Artifacts</h2>
+<p>The following official audit artifacts have been created and validated:
+1. <code>reports/vitaldb_100_acquisition_report.md</code>: This comprehensive clinical acquisition and preprocessing report.
+2. <code>reports/vitaldb_100_acquisition_audit.csv</code>: Case-by-case audit across all 100 cases (track presence, missingness, duration, episodes, positive windows, SQI status).
+3. <code>reports/vitaldb_100_label_summary.csv</code>: Complete breakdown of sliding window categories across Cohort A and Cohort B.
+4. <code>reports/vitaldb_100_feature_summary.csv</code>: Summary statistics (mean, std, min, 25%, 50%, 75%, max) for all 26 multimodal features.
+5. <code>reports/feature_leakage_check.md</code>: Mathematical and programmatic verification of temporal feature isolation.
+6. <code>reports/figures/vitaldb_100/</code>:
+   - <code>ecg_ppg_pat_alignment.png</code>: High-resolution multimodal alignment and beat-by-beat PAT delay annotation.
+   - <code>cohort_window_distribution.png</code>: Sliding window category breakdown for Cohort A and Cohort B.
+   - <code>st_episode_timeline.png</code>: Histogram of genuine sustained ST episode durations ($\ge 60\text{ s}$).
+   - <code>feature_distributions_qc.png</code>: Boxplot distributions comparing early-warning positive vs confirmed negative windows.</p>
+<hr />
+<h2>7. Subject-Level Splitting &amp; Next Steps</h2>
+<blockquote>
+<p>[!IMPORTANT]
+<strong>Dataset Readiness for Human Review</strong>:
+* All sliding windows are organized strictly by <code>caseid</code> and <code>cohort</code>.
+* <strong>No random window-level train/test division has been performed.</strong>
+* <strong>Zero machine-learning models have been trained.</strong>
+* When authorized by human review, the dataset must be split strictly at the <strong>patient/subject level</strong> (e.g. 70% train / 15% validation / 15% test, stratified by positive case status) to ensure complete statistical independence across splits.</p>
+</blockquote>
+</body>
+</html>

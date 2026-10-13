@@ -1,0 +1,51 @@
+cohort,caseid,all_required,has_ecg_ii,has_pleth,has_spo2,has_st_ii,has_ecg_v5,has_st_v5,duration_hrs,department,age,preop_htn,preop_dm,cad_cabg,opname,dx
+Cohort B (Corrected),1268,True,True,True,True,True,False,False,3.06,Thoracic surgery,57.0,0,0,False,Thymectomy,Thymoma
+Cohort B (Corrected),485,True,True,True,True,True,False,False,3.96,Thoracic surgery,67.0,0,0,False,Lung lobectomy,"Abnormal chest CT, lung nodule"
+Cohort B (Corrected),2630,True,True,True,True,True,False,False,3.08,General surgery,68.0,0,0,False,Anterior resection,"Colon cancer, sigmoid"
+Cohort B (Corrected),4498,True,True,True,True,True,True,False,3.75,General surgery,41.0,0,0,False,Liver sectionectomy,Hepatocellular adenoma 
+Cohort B (Corrected),3948,True,True,True,True,True,True,False,1.59,General surgery,72.0,1,0,False,Simple mastectomy,Invasive breast cancer left
+Cohort B (Corrected),3754,True,True,True,True,True,True,False,2.25,General surgery,54.0,1,0,False,Low anterior resection,Rectal cancer
+Cohort B (Corrected),5799,True,True,True,True,True,False,False,2.96,Thoracic surgery,60.0,0,0,False,Metastasectomy,Ingrowing nail
+Cohort B (Corrected),3216,True,True,True,True,True,True,False,2.14,General surgery,78.0,0,0,False,Incisional hernia repair,Abnormal electrocardiogram
+Cohort B (Corrected),864,True,True,True,True,True,False,False,1.88,General surgery,83.0,0,0,False,Excision,Hydrocele
+Cohort B (Corrected),1923,True,True,True,True,True,True,False,2.63,General surgery,69.0,1,0,False,Hemicolectomy,Cecal cancer
+Cohort B (Corrected),497,True,True,True,True,True,False,False,7.95,General surgery,66.0,1,0,False,Pylorus preserving pancreaticoduodenectomy,Ampulla of vater cancer
+Cohort B (Corrected),1855,True,True,True,True,True,True,False,4.73,General surgery,60.0,1,0,False,Liver segmentectomy,Hepatocellular carcinoma 
+Cohort B (Corrected),5779,True,True,True,True,True,False,False,0.78,General surgery,76.0,0,0,False,Cholecystectomy,Gallbladder stone without obstruction
+Cohort B (Corrected),4225,True,True,True,True,True,False,False,5.29,General surgery,62.0,1,0,False,Hemicolectomy,"Colon cancer, descending"
+Cohort B (Corrected),4016,True,True,True,True,True,False,False,1.75,Thoracic surgery,18.0,0,0,False,Bullectomy,Pneumothorax
+Cohort B (Corrected),5635,True,True,True,True,True,True,False,1.47,Thoracic surgery,79.0,0,0,False,Metastasectomy,"Colon cancer, sigmoid"
+Cohort B (Corrected),4771,True,True,True,True,True,False,False,1.23,General surgery,81.0,1,0,False,Removal of foreign body,Early gastric cancer
+Cohort B (Corrected),381,True,True,True,True,True,True,False,1.19,General surgery,74.0,0,0,False,Cholecystectomy,Gallbladder stone with cholecystitis without obstruction
+Cohort B (Corrected),2866,True,True,True,True,True,True,False,2.89,Gynecology,41.0,0,0,False,Myomectomy,Myoma uteri
+Cohort B (Corrected),1714,True,True,True,True,True,True,False,3.86,General surgery,66.0,0,0,False,Liver sectionectomy,Hepatocellular carcinoma
+Cohort B (Corrected),2419,True,True,True,True,True,False,False,2.51,Thoracic surgery,18.0,0,0,False,Lung lobectomy,Osteosarcoma of femur
+Cohort B (Corrected),4467,True,True,True,True,True,True,False,2.22,General surgery,64.0,0,0,False,Anterior resection,"Colon cancer, rectosigmoid"
+Cohort B (Corrected),360,True,True,True,True,True,True,False,1.87,General surgery,67.0,1,0,False,Simple mastectomy,Breast cancer right
+Cohort B (Corrected),481,True,True,True,True,True,False,False,2.76,Thoracic surgery,76.0,1,0,False,Lung lobectomy,Lung cancer unspecified side
+Cohort B (Corrected),2728,True,True,True,True,True,True,False,1.38,General surgery,81.0,0,0,False,Cholecystectomy,Symptomatic gallbladder stone without obstruction
+Cohort B (Corrected),5585,True,True,True,True,True,True,False,3.54,General surgery,66.0,1,1,False,Subtotal gastrectomy,Advanced gastric cancer
+Cohort B (Corrected),2172,True,True,True,True,True,True,False,8.14,General surgery,65.0,0,0,False,Hemihepatectomy,Hepatocellular carcinoma
+Cohort B (Corrected),4616,True,True,True,True,True,False,False,3.08,Thoracic surgery,81.0,0,0,False,Lung lobectomy,Lung cancer right
+Cohort B (Corrected),2253,True,True,True,True,True,False,False,1.22,Gynecology,25.0,0,0,False,Ovarian cystectomy,Pelvic mass
+Cohort B (Corrected),569,True,True,True,True,True,True,False,2.47,General surgery,57.0,1,0,False,Extended hemicolectomy,"Colon cancer, ascending"
+Cohort B (Corrected),111,True,True,True,True,True,True,False,4.8,General surgery,51.0,0,1,False,Kidney transplantation,End stage renal disease
+Cohort B (Corrected),2719,True,True,True,True,True,False,False,1.29,General surgery,36.0,0,0,False,Excision,"Atypical ductal hyperplasia, breast"
+Cohort B (Corrected),4349,True,True,True,True,True,True,False,1.15,General surgery,44.0,0,0,False,Appendectomy,Acute appendicitis
+Cohort B (Corrected),1269,True,True,True,True,True,False,False,0.73,Urology,59.0,1,0,False,Transurethral resection of bladder tumor,Bladder disease 
+Cohort B (Corrected),5664,True,True,True,True,True,False,False,1.19,Thoracic surgery,61.0,0,0,False,Metastasectomy,Rectal cancer 
+Cohort B (Corrected),33,True,True,True,True,True,False,False,1.75,General surgery,47.0,0,0,False,Hernia repair,Hepatocellular carcinoma 
+Cohort B (Corrected),3280,True,True,True,True,True,False,False,1.52,General surgery,60.0,0,0,False,Excision,Lipoma
+Cohort B (Corrected),4120,True,True,True,True,True,False,False,2.56,Thoracic surgery,68.0,1,0,False,Lung wedge resection,"Abnormal chest X-ray, lung"
+Cohort B (Corrected),2379,True,True,True,True,True,False,False,1.81,Thoracic surgery,61.0,0,0,False,Lung wedge resection,Lung cancer unspecified side
+Cohort B (Corrected),451,True,True,True,True,True,False,False,4.69,General surgery,62.0,1,0,False,Gastric bypass,Morbid obesity 
+Cohort B (Corrected),7,True,True,True,True,True,False,False,4.38,Thoracic surgery,52.0,0,0,False,Lung lobectomy,Nontuberculous mycobacterial infection
+Cohort B (Corrected),44,True,True,True,True,True,False,False,4.06,Thoracic surgery,56.0,0,0,False,Lung lobectomy,Lung cancer right
+Cohort B (Corrected),67,True,True,True,True,True,False,False,3.22,Thoracic surgery,78.0,1,0,False,Lung lobectomy,Lung cancer right
+Cohort B (Corrected),175,True,True,True,True,True,False,False,3.31,Urology,73.0,0,0,False,Radical prostatectomy,Prostate cancer 
+Cohort B (Corrected),388,True,True,True,True,True,False,False,3.85,Urology,74.0,0,0,False,Radical prostatectomy,Prostate cancer
+Cohort B (Corrected),108,True,True,True,True,True,False,False,2.66,Gynecology,26.0,0,0,False,Ovarian cystectomy,Ovarian cyst
+Cohort B (Corrected),112,True,True,True,True,True,False,False,2.98,Gynecology,41.0,0,0,False,Ovarian cystectomy,Ovarian cyst
+Cohort B (Corrected),24,True,True,True,True,True,False,False,1.8,General surgery,57.0,0,0,False,Gastric wedge resection,Gastrointestinal stromal tumor of stomach
+Cohort B (Corrected),25,True,True,True,True,True,True,False,4.12,General surgery,66.0,0,0,False,Total gastrectomy,Advanced gastric cancer
+Cohort B (Corrected),27,True,True,True,True,True,False,False,4.96,General surgery,50.0,0,0,False,Distal gastrectomy,Advanced gastric cancer 

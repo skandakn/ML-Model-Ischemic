@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BeatAhead: Cardiac Physiological ML Prototype - Dataset Research</title>
+<style>
+  @page {
+    size: A4;
+    margin: 18mm 16mm 20mm 16mm;
+    @bottom-right {
+      content: counter(page);
+    }
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1e293b;
+    line-height: 1.55;
+    font-size: 10.5pt;
+    margin: 0;
+    padding: 0;
+  }
+
+  h1 {
+    font-size: 20pt;
+    color: #0f172a;
+    border-bottom: 2.5px solid #2563eb;
+    padding-bottom: 6px;
+    margin-top: 0;
+    margin-bottom: 12px;
+    page-break-after: avoid;
+  }
+
+  h2 {
+    font-size: 14pt;
+    color: #1e3a8a;
+    border-bottom: 1px solid #cbd5e1;
+    padding-bottom: 4px;
+    margin-top: 24px;
+    margin-bottom: 10px;
+    page-break-after: avoid;
+  }
+
+  h3 {
+    font-size: 12pt;
+    color: #1d4ed8;
+    margin-top: 18px;
+    margin-bottom: 8px;
+    page-break-after: avoid;
+  }
+
+  h4 {
+    font-size: 10.5pt;
+    color: #334155;
+    margin-top: 12px;
+    margin-bottom: 4px;
+    page-break-after: avoid;
+  }
+
+  p, li {
+    color: #334155;
+  }
+
+  ul, ol {
+    margin-top: 4px;
+    margin-bottom: 8px;
+    padding-left: 22px;
+  }
+
+  li {
+    margin-bottom: 3px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0;
+    font-size: 8.5pt;
+    page-break-inside: avoid;
+  }
+
+  th, td {
+    border: 1px solid #cbd5e1;
+    padding: 6px 8px;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    background-color: #0f2b48;
+    color: #ffffff;
+    font-weight: 600;
+  }
+
+  tr:nth-child(even) {
+    background-color: #f8fafc;
+  }
+
+  code {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 9pt;
+    background-color: #f1f5f9;
+    padding: 2px 4px;
+    border-radius: 3px;
+    color: #0f172a;
+  }
+
+  pre {
+    background-color: #0f172a;
+    color: #e2e8f0;
+    padding: 10px 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 8pt;
+    line-height: 1.35;
+    page-break-inside: avoid;
+  }
+
+  pre code {
+    background-color: transparent;
+    color: inherit;
+    padding: 0;
+  }
+
+  blockquote {
+    margin: 10px 0;
+    padding: 8px 14px;
+    background-color: #eff6ff;
+    border-left: 4px solid #3b82f6;
+    color: #1e40af;
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid #e2e8f0;
+    margin: 18px 0;
+  }
+
+  a {
+    color: #2563eb;
+    text-decoration: none;
+  }
+
+  .footer {
+    margin-top: 30px;
+    font-size: 8pt;
+    color: #94a3b8;
+    text-align: center;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 8px;
+  }
+</style>
+</head>
+<body>
+<h1>BeatAhead Cardiac Physiological ML Prototype: Dataset Research &amp; Feasibility Report</h1>
+<p><strong>Target Document:</strong> <code>reports/dataset_research.md</code><br />
+<strong>Focus:</strong> Multimodal physiological pipeline (ECG, PPG, SpO2, Motion/IMU) for cardiac physiological monitoring and ischemic stress detection.<br />
+<strong>Author:</strong> BeatAhead ML &amp; Clinical Physiological Research Team  </p>
+<hr />
+<h2>1. Executive Summary &amp; Clinical Ground Truth Framework</h2>
+<p>The objective of the <strong>BeatAhead</strong> cardiac physiological prototype is to evaluate the feasibility of machine learning models (specifically gradient boosted decision trees such as XGBoost using engineered physiological features) for cardiac monitoring and ischemic stress detection using non-invasive, multimodal signals:
+* <strong>Electrocardiogram (ECG)</strong>: Myocardial electrical activation and repolarization.
+* <strong>Photoplethysmogram (PPG)</strong>: Peripheral microvascular blood volume oscillations.
+* <strong>Pulse Oximetry (SpO2)</strong>: Arterial blood hemoglobin oxygen saturation.
+* <strong>Inertial Measurement Unit (IMU / Accelerometry)</strong>: Motion kinematics and physical activity context.</p>
+<h3>The "Ischemic Stress" Physiological Dilemma</h3>
+<p>A common and critical failure mode in wearable health tech literature is the conflation of different physiological "stress" states. When evaluating public databases—especially on PhysioNet—one must <strong>never assume</strong> that an annotated stress dataset provides ground truth for myocardial ischemia. Clinically, these states must be rigorously distinguished:</p>
+<pre><code>+----------------------------------------------------------------------------------------------------+
+|                                    PHYSIOLOGICAL &quot;STRESS&quot; SPECTRUM                                 |
++------------------------------------+----------------------------------+----------------------------+
+| Category                           | Core Mechanism                   | Biomarkers / Manifestations|
++------------------------------------+----------------------------------+----------------------------+
+| 1. True Myocardial Ischemia        | Coronary perfusion failure:      | ST depression/elevation,   |
+|    (Ischemic Stress)               | Oxygen supply &lt; myocardial demand| T-wave inversion, cTnI/cTnT|
+|                                    | (coronary stenosis, occlusion)   | troponin release, angina   |
++------------------------------------+----------------------------------+----------------------------+
+| 2. Physical Exertion Stress        | Increased metabolic workload:    | Tachycardia, elevated SBP, |
+|    (Exercise in healthy subjects)  | High cardiac output; coronary    | normal ST-T (intact reserve|
+|                                    | flow increases to match demand   | high motion artifacts (IMU)|
++------------------------------------+----------------------------------+----------------------------+
+| 3. Autonomic / Mental Stress       | Sympatho-adrenal surge:          | Elevated HR, decreased HRV,|
+|    (e.g., TSST, cognitive tasks)   | Epinephrine release, peripheral  | increased EDA (galvanic    |
+|                                    | vasoconstriction, intact reserve | skin response), normal ST  |
++------------------------------------+----------------------------------+----------------------------+
+| 4. Systemic Hypoxemic Stress       | Arterial blood desaturation:     | Decreased SpO2 (&lt;90%),     |
+|    (e.g., sleep apnea, altitude)   | Systemic low PaO2, compensatory  | hypoxic tachycardia,       |
+|                                    | tachycardia, normal vessels      | vascular vasoconstriction  |
++------------------------------------+----------------------------------+----------------------------+
+</code></pre>
+<p><strong>Key Finding of this Research</strong>: No single public dataset currently contains ambulatory wrist PPG + chest ECG + continuous SpO2 + 6-DOF IMU recorded on coronary artery disease patients undergoing exercise-induced myocardial ischemia with gold-standard cardiologist annotations. </p>
+<p>Consequently, developing a defensible prototype requires an <strong>evidence-based, dual-track data strategy</strong>:
+1. <strong>Track 1 (Clinical Cardiac Injury / Hemodynamic Stress)</strong>: Datasets containing synchronized ECG + PPG + SpO2 tied to verified clinical myocardial injury (troponin release, myocardial infarction) or annotated ST ischemia.
+2. <strong>Track 2 (Multimodal Wearable Fusion &amp; Motion Dynamics)</strong>: Datasets containing synchronized ECG + PPG + SpO2 + IMU in healthy subjects undergoing physical exertion to validate motion-robust feature extraction, Pulse Arrival Time (PAT), and noise gating.</p>
+<hr />
+<h2>2. Systematic Evaluation of Candidate Datasets</h2>
+<hr />
+<h3>Candidate 1: VitalDB (A High-Fidelity Multi-Parameter Vital Signs Database in Surgical Patients)</h3>
+<h4>1. Exact Dataset Name and Source</h4>
+<ul>
+<li><strong>Name</strong>: VitalDB (A high-fidelity multi-parameter vital signs database in surgical patients)</li>
+<li><strong>Source</strong>: Seoul National University Hospital / VitalLab; hosted openly on PhysioNet (<code>https://physionet.org/content/vitaldb/1.0.0/</code>) and <code>vitaldb.net</code>.</li>
+<li><strong>Citation</strong>: Lee HC, Park Y, Yoon SB, et al. <em>VitalDB, a high-fidelity multi-parameter vital signs database in surgical patients.</em> Scientific Data 9, 279 (2022).</li>
+</ul>
+<h4>2. Number of Subjects/Patients</h4>
+<ul>
+<li><strong>6,388 surgical patients</strong> undergoing non-cardiac or cardiac surgeries.</li>
+</ul>
+<h4>3. Available Signals</h4>
+<ul>
+<li><strong>Signals</strong>: Up to 196 intraoperative physiological recording tracks:</li>
+<li><strong>ECG</strong>: Multi-lead waveforms (Lead II, Lead V5, Lead I).</li>
+<li><strong>PPG</strong>: Continuous arterial plethysmogram waveform (<code>SNUADC/PLETH</code> or monitor pleth).</li>
+<li><strong>SpO2</strong>: Continuous arterial oxygen saturation numerics (<code>Solar8000/PLETH_SPO2</code>).</li>
+<li><strong>Hemodynamics</strong>: Continuous invasive Arterial Blood Pressure (ABP), Central Venous Pressure (CVP), cardiac output, stroke volume variation (SVV).</li>
+<li><strong>Motion / IMU</strong>: <strong>None</strong> (patients are supine/immobilized in surgical suites).</li>
+</ul>
+<h4>4. Sampling Rates</h4>
+<ul>
+<li>ECG waveforms: <strong>500 Hz</strong></li>
+<li>PPG waveforms: <strong>100 Hz, 62.5 Hz, or 500 Hz</strong> (depending on recording device track)</li>
+<li>ABP waveforms: <strong>500 Hz</strong></li>
+<li>Clinical numerics (SpO2, Heart Rate, NIBP): <strong>1–7 second intervals</strong></li>
+</ul>
+<h4>5. Available Clinical Labels/Outcomes</h4>
+<ul>
+<li>73 perioperative clinical variables and 34 time-series laboratory variables.</li>
+<li><strong>Cardiac / Ischemic Outcomes</strong>:</li>
+<li>Pre- and post-operative <strong>cardiac Troponin I (cTnI)</strong> and <strong>CK-MB</strong> laboratory values.</li>
+<li>Clinical diagnosis of <strong>Postoperative Myocardial Infarction (PMI)</strong> and <strong>Myocardial Injury after Noncardiac Surgery (MINS)</strong>.</li>
+<li>Intraoperative adverse cardiac events: severe hypotension (MAP &lt; 65 mmHg, prolonged duration), hypoxemia (SpO2 &lt; 90%), severe tachycardia/bradycardia, and 30-day mortality.</li>
+</ul>
+<h4>6. Defensibility of ML Prediction Target</h4>
+<ul>
+<li><strong>Defensibility: HIGH (Clinical Myocardial Injury / Hemodynamic Collapse)</strong>.</li>
+<li><em>Target A (Biomarker ground truth)</em>: Binary classification or regression of postoperative myocardial injury (elevated post-op Troponin I above 99th percentile upper reference limit) using intraoperative windowed physiological features.</li>
+<li><em>Target B (Acute hemodynamic instability)</em>: Real-time prediction of acute hypotension/hypoperfusion episodes (coronary hypoperfusion precursor) within the subsequent 5–10 minute window.</li>
+<li><em>Important Caveat</em>: The dataset does not provide second-by-second manual ST segment episode annotations drawn by a cardiologist; ST deviation must be computed algorithmically from Lead II/V5 or linked to the troponin outcome.</li>
+</ul>
+<h4>7. Sensor Synchronization</h4>
+<ul>
+<li><strong>ECG, PPG, SpO2 Synchronization</strong>: <strong>YES, millisecond-accurate</strong>. Data was acquired using the proprietary Vital Recorder application directly interfacing hospital patient monitors (GE Tram-Rac, Philips IntelliVue, Maquet) with unified clock timestamps.</li>
+<li><strong>Motion / IMU</strong>: Not available.</li>
+</ul>
+<h4>8. License and Usage Restrictions</h4>
+<ul>
+<li><strong>License</strong>: <strong>Creative Commons Attribution 4.0 International (CC BY 4.0)</strong>.</li>
+<li><strong>Access</strong>: Open access; no credentialing or CITI certifications required. Python library <code>vitaldb</code> allows immediate programmatic streaming.</li>
+</ul>
+<h4>9. Major Limitations</h4>
+<ol>
+<li><strong>Lack of Motion/IMU Data</strong>: All data collected under anesthesia; cannot train accelerometer-based motion artifact cancellation.</li>
+<li><strong>Confounding Anesthetic Drugs</strong>: Vasoactive drugs (phenylephrine, norepinephrine, ephedrine) and general anesthetics alter vascular tone and autonomic heart rate variability (HRV).</li>
+<li><strong>Immobilized Setting</strong>: Reflects perioperative physiology rather than ambulatory wearable activity.</li>
+</ol>
+<h4>10. Suitability for XGBoost Model</h4>
+<ul>
+<li><strong>Suitability: EXCEPTIONAL</strong>.</li>
+<li>Highly suited for tabular feature extraction across 30-second to 5-minute sliding windows:<ul>
+<li><em>ECG</em>: Mean HR, RMSSD, SDNN, spectral LF/HF ratio, ST-segment elevation/depression amplitude (Lead II and V5 at J+60ms), QRS duration.</li>
+<li><em>PPG</em>: Pulse Arrival Time (PAT = time from ECG R-peak to PPG systolic peak), pulse amplitude, crest time, augmentation index, dP/dt.</li>
+<li><em>SpO2</em>: Mean SpO2, desaturation nadir, desaturation duration.</li>
+</ul>
+</li>
+<li>Forms a pristine tabular dataset of $N &gt; 50,000$ feature windows mapped to troponin elevation or hypotensive stress for XGBoost.</li>
+</ul>
+<hr />
+<h3>Candidate 2: Pulse Transit Time PPG Dataset (PhysioNet)</h3>
+<h4>1. Exact Dataset Name and Source</h4>
+<ul>
+<li><strong>Name</strong>: Pulse Transit Time PPG Dataset (PTT PPG)</li>
+<li><strong>Source</strong>: PhysioNet (<code>https://physionet.org/content/pulse-transit-time-ppg/1.1.0/</code>)</li>
+<li><strong>Citation</strong>: Boccignone G, Conte D, Cuculo V, et al. <em>An Open-Access Database for Evaluating Pulse Transit Time and Photoplethysmogram-Based Blood Pressure Estimation.</em> Sensors 2020, 20(24), 7114.</li>
+</ul>
+<h4>2. Number of Subjects/Patients</h4>
+<ul>
+<li><strong>22 healthy subjects</strong> (13 male, 9 female, aged 19–56, normotensive).</li>
+</ul>
+<h4>3. Available Signals</h4>
+<ul>
+<li><strong>Complete Multimodal Suite</strong>:</li>
+<li><strong>PPG</strong>: 2 sets of 3-wavelength raw PPG signals (Green 525nm, Red 650nm, Infrared 870nm) measured at two arterial sites (wrist and index finger).</li>
+<li><strong>ECG</strong>: Lead I / modified chest lead.</li>
+<li><strong>Motion / IMU</strong>: 3-axis Accelerometer + 3-axis Gyroscope (6-DOF) co-located on the sensor housing.</li>
+<li><strong>Biomechanical Auxiliaries</strong>: Sensor attachment pressure and skin temperature.</li>
+</ul>
+<h4>4. Sampling Rates</h4>
+<ul>
+<li><strong>500 Hz uniform sampling</strong> across ALL channels (ECG, all PPG channels, 6-DOF IMU, pressure).</li>
+</ul>
+<h4>5. Available Clinical Labels/Outcomes</h4>
+<ul>
+<li>Physical activity state annotations:
+  1. <strong>Sitting (Rest)</strong>
+  2. <strong>Walking (4 km/h on treadmill)</strong>
+  3. <strong>Running (8 km/h on treadmill)</strong></li>
+<li>Spot physiological ground truth:</li>
+<li>Baseline and post-activity Systolic and Diastolic Blood Pressure (manual sphygmomanometer).</li>
+<li>Baseline and post-activity SpO2 and Heart Rate.</li>
+<li>Demographic metadata (age, sex, height, weight, BMI).</li>
+</ul>
+<h4>6. Defensibility of ML Prediction Target</h4>
+<ul>
+<li><strong>Defensibility: STRICTLY LIMITED TO EXERTION / PTT / MOTION (NO ISCHEMIA)</strong>.</li>
+<li><strong>CRITICAL CLINICAL REALITY</strong>: All participants are <strong>young, healthy volunteers</strong>. There is <strong>ZERO</strong> myocardial ischemia, zero coronary stenosis, and zero pathological hypoxia.</li>
+<li><em>Valid ML Target</em>: (a) Physical exertion state classification (Rest vs. Moderate vs. Vigorous exertion), (b) Continuous Blood Pressure / Hemodynamic surge estimation via PAT, (c) Motion artifact corruption level detection.</li>
+<li><em>Invalid Claim</em>: Claiming this dataset detects "ischemic stress" is medically fraudulent; it reflects healthy sympathetic cardiac compensation during exercise.</li>
+</ul>
+<h4>7. Sensor Synchronization</h4>
+<ul>
+<li><strong>Synchronization: PERFECT</strong>. All 19 channels were acquired through an onboard ARM Cortex-M4 microcontroller running at 180 MHz, guaranteeing simultaneous hardware acquisition within a 2 ms window at 500 Hz.</li>
+</ul>
+<h4>8. License and Usage Restrictions</h4>
+<ul>
+<li><strong>License</strong>: <strong>Open Data Commons Open Database License v1.0 (ODbL)</strong>.</li>
+<li><strong>Access</strong>: Fully public on PhysioNet; no credentialing needed.</li>
+</ul>
+<h4>9. Major Limitations</h4>
+<ol>
+<li><strong>Zero Pathological Labels</strong>: No myocardial ischemia, arrhythmia, or arterial desaturation.</li>
+<li><strong>Small Cohort</strong>: Only 22 subjects; total recording duration per subject is relatively short (~15–20 minutes total across conditions).</li>
+<li><strong>Discrete SpO2/BP</strong>: SpO2 and blood pressure are pre/post intermittent measurements, not continuous waveform tracks.</li>
+</ol>
+<h4>10. Suitability for XGBoost Model</h4>
+<ul>
+<li><strong>Suitability: HIGH (for Wearable Signal Quality &amp; Exertion Dynamics)</strong>.</li>
+<li>Ideal for training an XGBoost pipeline on:<ul>
+<li>IMU-gated signal quality index (SQI) regression.</li>
+<li>PAT extraction under motion.</li>
+<li>Physical workload / exertion classification using combined ECG (HR, HRV) + PPG (pulse morphology) + IMU (RMS acceleration, spectral energy).</li>
+</ul>
+</li>
+</ul>
+<hr />
+<h3>Candidate 3: Long-Term ST Database (LTST DB)</h3>
+<h4>1. Exact Dataset Name and Source</h4>
+<ul>
+<li><strong>Name</strong>: The Long-Term ST Database (LTST DB)</li>
+<li><strong>Source</strong>: PhysioNet (<code>https://physionet.org/content/ltstdb/1.0.0/</code>)</li>
+<li><strong>Citation</strong>: Jager F, Taddei A, Moody GB, et al. <em>Long-term ST database: a reference for the development and evaluation of automated ischaemia detectors and for the study of the dynamics of myocardial ischaemia.</em> Medical &amp; Biological Engineering &amp; Computing 41, 172–182 (2003).</li>
+</ul>
+<h4>2. Number of Subjects/Patients</h4>
+<ul>
+<li><strong>80 subjects</strong> (86 long-term ambulatory Holter ECG recordings, 21 to 24 hours each).</li>
+</ul>
+<h4>3. Available Signals</h4>
+<ul>
+<li><strong>ECG Only</strong>: 2 or 3 leads of ambulatory ECG (typically modified bipolar leads: CM5, CC5, modified V1, V2, or V5).</li>
+<li><strong>PPG, SpO2, Motion / IMU</strong>: <strong>NONE</strong>.</li>
+</ul>
+<h4>4. Sampling Rates</h4>
+<ul>
+<li><strong>250 Hz</strong>, 12-bit resolution per channel.</li>
+</ul>
+<h4>5. Available Clinical Labels/Outcomes</h4>
+<ul>
+<li><strong>Gold-Standard Expert Cardiologist Annotations</strong>:</li>
+<li>Beat-by-beat QRS detection and morphology (normal, ventricular ectopic, supraventricular ectopic).</li>
+<li>Annotated episodes of <strong>transient ST-segment shifts</strong>:<ul>
+<li><strong>Ischemic ST episodes</strong> (significant ST deviation meeting European Society of Cardiology / AHA criteria: $\ge 0.1\text{ mV}$ depression or $\ge 0.2\text{ mV}$ elevation lasting $\ge 30\text{ s}$).</li>
+<li><strong>Heart-rate related ST changes</strong> (distinguishing slow rate-dependent shifts from true ischemic events).</li>
+<li><strong>Postural / axis change ST variations</strong> (distinguishing motion/body position shifts from ischemia).</li>
+<li>Conduction abnormality / bundle branch block annotations.</li>
+</ul>
+</li>
+</ul>
+<h4>6. Defensibility of ML Prediction Target</h4>
+<ul>
+<li><strong>Defensibility: GOLD STANDARD (ECG Myocardial Ischemia)</strong>.</li>
+<li>The most defensible ambulatory ECG database in medical literature for transient ischemic stress detection. It rigorously isolates true ischemic repolarization changes from benign heart-rate drifts and positional changes.</li>
+<li>ML Target: Binary classification of 10s–30s ECG windows (Ischemia vs. Non-Ischemia) or detection of ischemic event onset.</li>
+</ul>
+<h4>7. Sensor Synchronization</h4>
+<ul>
+<li><strong>Synchronization</strong>: N/A (unimodal ECG; leads are hardware-synchronized).</li>
+</ul>
+<h4>8. License and Usage Restrictions</h4>
+<ul>
+<li><strong>License</strong>: <strong>PhysioNet Open Access</strong> (citation required; standard open academic reuse).</li>
+</ul>
+<h4>9. Major Limitations</h4>
+<ol>
+<li><strong>Unimodal (ECG Only)</strong>: Zero PPG, zero SpO2, zero IMU data.</li>
+<li>Cannot evaluate multimodal fusion hypotheses (e.g., whether peripheral PPG pulse transit time drops prior to ECG ST-segment changes).</li>
+</ol>
+<h4>10. Suitability for XGBoost Model</h4>
+<ul>
+<li><strong>Suitability: EXCELLENT (for ECG Ischemia Module)</strong>.</li>
+<li>Provides an unmatched benchmark for training an XGBoost baseline on engineered ECG features:<ul>
+<li>ST segment level at $J+60\text{ ms}$ and $J+80\text{ ms}$ relative to the isoelectric line.</li>
+<li>ST slope (horizontal, downsloping, upsloping).</li>
+<li>T-wave peak amplitude, polarity, and symmetry.</li>
+<li>Instantaneous heart rate and short-term HRV.</li>
+</ul>
+</li>
+</ul>
+<hr />
+<h3>Candidate 4: STAFF III Database</h3>
+<h4>1. Exact Dataset Name and Source</h4>
+<ul>
+<li><strong>Name</strong>: STAFF III Database</li>
+<li><strong>Source</strong>: PhysioNet (<code>https://physionet.org/content/staffiii/1.0.0/</code>)</li>
+<li><strong>Citation</strong>: Pettersson J, Carro E, Sörnmo L, et al. <em>The STAFF III database: ECGs recorded during prolonged balloon inflation.</em> Journal of Electrocardiology 48(4), 585–593 (2015).</li>
+</ul>
+<h4>2. Number of Subjects/Patients</h4>
+<ul>
+<li><strong>104 patients</strong> undergoing elective percutaneous transluminal coronary angioplasty (PTCA).</li>
+</ul>
+<h4>3. Available Signals</h4>
+<ul>
+<li><strong>ECG Only</strong>: Standard diagnostic <strong>12-lead ECG</strong> (Leads I, II, III, aVR, aVL, aVF, V1–V6).</li>
+<li><strong>PPG, SpO2, Motion / IMU</strong>: <strong>NONE</strong>.</li>
+</ul>
+<h4>4. Sampling Rates</h4>
+<ul>
+<li><strong>1000 Hz</strong>, uncompressed high-fidelity recording.</li>
+</ul>
+<h4>5. Available Clinical Labels/Outcomes</h4>
+<ul>
+<li><strong>Pristine Experimental Occlusion Ground Truth</strong>:</li>
+<li>Exact millisecond timestamps of <strong>balloon inflation</strong> (start of total mechanical coronary occlusion = acute transmural ischemia).</li>
+<li>Exact timestamps of <strong>balloon deflation</strong> (reperfusion).</li>
+<li>Exact anatomical occlusion site (Left Anterior Descending [LAD], Right Coronary Artery [RCA], Left Circumflex [LCx]).</li>
+<li>Balloon inflation duration (average 1.5–5 minutes).</li>
+<li>Clinical chest pain severity scores and angiographic stenosis severity.</li>
+</ul>
+<h4>6. Defensibility of ML Prediction Target</h4>
+<ul>
+<li><strong>Defensibility: ABSOLUTE GROUND TRUTH FOR ACUTE TRANSMURAL ISCHEMIA</strong>.</li>
+<li>Balloon inflation is the human clinical model of induced acute zero-flow myocardial ischemia. There is zero ambiguity regarding the onset, duration, and anatomical territory of the ischemic insult.</li>
+<li>Target: Binary classification of acute ischemia vs. pre-inflation baseline; regression of ischemic duration; or anatomical vessel localization (anterior vs. inferior).</li>
+</ul>
+<h4>7. Sensor Synchronization</h4>
+<ul>
+<li><strong>Synchronization</strong>: N/A (12-lead ECG is internally synchronized at 1000 Hz).</li>
+</ul>
+<h4>8. License and Usage Restrictions</h4>
+<ul>
+<li><strong>License</strong>: <strong>PhysioNet Restricted Access</strong>.</li>
+<li><strong>Restrictions</strong>: Requires formal PhysioNet Credentialing, completed CITI "Data or Specimens Only Research" certification, and signing a Data Use Agreement (DUA). Cannot be accessed anonymously or instantly.</li>
+</ul>
+<h4>9. Major Limitations</h4>
+<ol>
+<li><strong>ECG Only</strong>: No PPG, SpO2, or motion data.</li>
+<li><strong>Artificial Mechanical Occlusion</strong>: Acute balloon occlusion in a catheterization lab produces immediate, profound transmural ischemia (STEMI-like), which is physiologically distinct from subtle exertional subendocardial ischemia (angina) in ambulatory patients.</li>
+<li><strong>Immobile Patients</strong>: Patients are lying supine on a catheterization fluoroscopy table.</li>
+</ol>
+<h4>10. Suitability for XGBoost Model</h4>
+<ul>
+<li><strong>Suitability: HIGH (for High-Fidelity ECG Validation)</strong>.</li>
+<li>Enables tabular feature extraction: 12-lead ST elevation/depression, QRS width, high-frequency QRS power, T-wave amplitude.</li>
+<li>Serves as an ideal positive-control validation benchmark for any ECG ischemia feature extractor.</li>
+</ul>
+<hr />
+<h3>Candidate 5: MIMIC-III Waveform Database Matched Subset</h3>
+<h4>1. Exact Dataset Name and Source</h4>
+<ul>
+<li><strong>Name</strong>: MIMIC-III Waveform Database Matched Subset</li>
+<li><strong>Source</strong>: PhysioNet (<code>https://physionet.org/content/mimic3wdb-matched/1.0/</code>)</li>
+<li><strong>Citation</strong>: Moody B, Moody G, Villarroel M, et al. <em>MIMIC-III Waveform Database Matched Subset.</em> PhysioNet (2020).</li>
+</ul>
+<h4>2. Number of Subjects/Patients</h4>
+<ul>
+<li><strong>~10,282 matched ICU patients</strong> (~22,317 waveform records linked directly to the clinical database).</li>
+</ul>
+<h4>3. Available Signals</h4>
+<ul>
+<li><strong>Waveforms</strong>:</li>
+<li>Multi-lead ECG (Leads II, V, aVR, etc.).</li>
+<li>PPG (continuous arterial <code>PLETH</code> waveform).</li>
+<li>Arterial Blood Pressure (ABP).</li>
+<li>Respiration.</li>
+<li><strong>Numerics</strong>: Periodic time series for SpO2, Heart Rate, NIBP, Respiration Rate.</li>
+<li><strong>Motion / IMU</strong>: <strong>NONE</strong>.</li>
+</ul>
+<h4>4. Sampling Rates</h4>
+<ul>
+<li>Waveforms (ECG, PPG, ABP): <strong>125 Hz</strong> (standardized downsampled WFDB archive).</li>
+<li>Numerics (SpO2, HR): <strong>1 sample per minute or 1 Hz</strong>.</li>
+</ul>
+<h4>5. Available Clinical Labels/Outcomes</h4>
+<ul>
+<li>Linked to the full MIMIC-III Clinical Database:</li>
+<li>ICD-9 clinical diagnosis codes: Acute Myocardial Infarction (<code>410.xx</code>), Ischemic Heart Disease (<code>411.xx</code>, <code>414.xx</code>).</li>
+<li>Serial laboratory troponin tests (Troponin T and Troponin I) with exact lab draw timestamps.</li>
+<li>In-hospital mortality, length of stay, cardiac arrest, defibrillation events.</li>
+</ul>
+<h4>6. Defensibility of ML Prediction Target</h4>
+<ul>
+<li><strong>Defensibility: MODERATE TO HIGH (Patient-Level Outcome, NOT Continuous Waveform Episode)</strong>.</li>
+<li><em>Defensible</em>: Predicting subsequent acute troponin elevation or ICU mortality/shock from 1-hour multimodal physiological windows.</li>
+<li><em>Non-Defensible / High Risk</em>: Minute-by-minute continuous ischemia detection is <strong>not pre-annotated</strong>. Hospital discharge ICD codes span entire admissions; pinpointing the exact minute of ischemia onset requires noisy heuristics.</li>
+</ul>
+<h4>7. Sensor Synchronization</h4>
+<ul>
+<li><strong>Synchronization: YES</strong>. Waveform channels (ECG, PPG, ABP) are synchronized at 125 Hz. Numerics (SpO2) are time-aligned via record timestamps.</li>
+</ul>
+<h4>8. License and Usage Restrictions</h4>
+<ul>
+<li><strong>License</strong>: <strong>Open Data Commons Open Database License (ODbL v1.0)</strong>.</li>
+<li><strong>Restrictions</strong>: Requires full PhysioNet credentialing, CITI Human Subjects Training, and signed DUA.</li>
+</ul>
+<h4>9. Major Limitations</h4>
+<ol>
+<li><strong>Low Waveform Sampling Rate (125 Hz)</strong>: 125 Hz ECG limits precision of fiducial point detection (R-peak jitter $\pm 8\text{ ms}$), affecting high-resolution HRV and ST slope measurements.</li>
+<li><strong>No Motion / IMU</strong>: Bedbound ICU patients.</li>
+<li><strong>Massive Data Wrangling Overhead</strong>: Hundreds of gigabytes; high proportion of disconnected leads and artifactual PPG damping.</li>
+</ol>
+<h4>10. Suitability for XGBoost Model</h4>
+<ul>
+<li><strong>Suitability: MODERATE TO HIGH</strong>.</li>
+<li>Suitable for windowed tabular features (PAT from ECG-to-PPG, pulse rate variability, mean SpO2, SpO2 desaturation variance) predicting acute clinical deterioration.</li>
+<li>Less agile for early prototyping than VitalDB due to low sampling frequency (125 Hz) and credentialing barrier.</li>
+</ul>
+<hr />
+<h3>Candidate 6: WESAD (Wearable Stress and Affect Detection)</h3>
+<h4>1. Exact Dataset Name and Source</h4>
+<ul>
+<li><strong>Name</strong>: WESAD (Wearable Stress and Affect Detection)</li>
+<li><strong>Source</strong>: UCI Machine Learning Repository &amp; University of Siegen</li>
+<li><strong>Citation</strong>: Schmidt P, Reiss A, Duerichen R, et al. <em>Introducing WESAD, a Multimodal Dataset for Wearable Stress and Affect Detection.</em> ACM ICMI 2018.</li>
+</ul>
+<h4>2. Number of Subjects/Patients</h4>
+<ul>
+<li><strong>15 healthy subjects</strong>.</li>
+</ul>
+<h4>3. Available Signals</h4>
+<ul>
+<li><strong>Chest (RespiBAN)</strong>: ECG, Electrodermal Activity (EDA), Electromyogram (EMG), Respiration, Skin Temperature, 3-axis Accelerometer.</li>
+<li><strong>Wrist (Empatica E4)</strong>: PPG (Blood Volume Pulse - BVP), EDA, Skin Temperature, 3-axis Accelerometer.</li>
+<li><strong>SpO2</strong>: <strong>NONE</strong>.</li>
+</ul>
+<h4>4. Sampling Rates</h4>
+<ul>
+<li>RespiBAN (Chest): <strong>700 Hz</strong> (ECG, ACC, Respiration).</li>
+<li>Empatica E4 (Wrist): PPG at <strong>64 Hz</strong>, Accelerometer at <strong>32 Hz</strong>, EDA/Temp at <strong>4 Hz</strong>.</li>
+</ul>
+<h4>5. Available Clinical Labels/Outcomes</h4>
+<ul>
+<li>Psychophysiological protocol condition labels:
+  1. Baseline (20 min neutral reading)
+  2. <strong>Psychological Stress</strong> (Trier Social Stress Test: public speaking + mental arithmetic)
+  3. Amusement (funny video clips)
+  4. Meditation</li>
+</ul>
+<h4>6. Defensibility of ML Prediction Target</h4>
+<ul>
+<li><strong>Defensibility: STRICTLY LIMITED TO AUTONOMIC PSYCHOLOGICAL STRESS</strong>.</li>
+<li><strong>CRITICAL CLINICAL REALITY</strong>: WESAD records <strong>autonomic sympathetic nervous system arousal</strong>, NOT myocardial ischemia.</li>
+<li>Subjects have normal coronary arteries and zero myocardial hypoxia. Using WESAD to train a model and calling it an "ischemic stress detector" is completely invalid.</li>
+</ul>
+<h4>7. Sensor Synchronization</h4>
+<ul>
+<li><strong>Synchronization</strong>: Synchronized between RespiBAN and Empatica E4 using event markers and cross-correlation.</li>
+</ul>
+<h4>8. License and Usage Restrictions</h4>
+<ul>
+<li><strong>License</strong>: Open access for academic/research purposes.</li>
+</ul>
+<h4>9. Major Limitations</h4>
+<ol>
+<li>Zero cardiovascular pathology or ischemia.</li>
+<li>No SpO2 channel.</li>
+<li>Wrist PPG sampled at only 64 Hz, which severely restricts millisecond-level PAT calculation.</li>
+</ol>
+<h4>10. Suitability for XGBoost Model</h4>
+<ul>
+<li><strong>Suitability: POOR for Ischemic Cardiac Prototype; HIGH only for Autonomic Stress Baselines</strong>.</li>
+<li>Not recommended for the core BeatAhead cardiac ischemia objective.</li>
+</ul>
+<hr />
+<h3>Candidate 7: MESA Sleep Dataset (Multi-Ethnic Study of Atherosclerosis)</h3>
+<h4>1. Exact Dataset Name and Source</h4>
+<ul>
+<li><strong>Name</strong>: MESA Sleep Dataset</li>
+<li><strong>Source</strong>: National Sleep Research Resource (NSRR) / NIH-NHLBI (<code>https://sleepdata.org/datasets/mesa</code>)</li>
+<li><strong>Citation</strong>: Chen X, Wang R, Zee P, et al. <em>Racial/Ethnic Differences in Sleep Disturbances: The Multi-Ethnic Study of Atherosclerosis (MESA).</em> Sleep 2015, 38(6), 877–888.</li>
+</ul>
+<h4>2. Number of Subjects/Patients</h4>
+<ul>
+<li><strong>2,056 multi-ethnic participants</strong> (ages 54–93, large population cohort with high prevalence of cardiovascular risk factors: diabetes, hypertension, coronary calcification).</li>
+</ul>
+<h4>3. Available Signals</h4>
+<ul>
+<li>Full Overnight Polysomnography (PSG):</li>
+<li><strong>ECG</strong>: Lead I / modified thoracic lead.</li>
+<li><strong>PPG</strong>: Finger photoplethysmography waveform (Nonin 8000J).</li>
+<li><strong>SpO2</strong>: Continuous arterial pulse oximetry.</li>
+<li><strong>Respiration</strong>: Abdominal and thoracic inductance plethysmography bands, airflow.</li>
+<li><strong>Motion</strong>: Actigraphy (7-day wrist-worn accelerometer data, available as separate files).</li>
+</ul>
+<h4>4. Sampling Rates</h4>
+<ul>
+<li>ECG: <strong>256 Hz</strong></li>
+<li>PPG: <strong>256 Hz</strong></li>
+<li>Continuous SpO2: <strong>1 Hz</strong></li>
+<li>Actigraphy: 30-second activity counts</li>
+</ul>
+<h4>5. Available Clinical Labels/Outcomes</h4>
+<ul>
+<li><strong>Continuous Sleep Phenotypes</strong>: Exact scored timestamps of hypopnea and obstructive apnea events, oxygen desaturations ($\ge 3\%$ and $\ge 4\%$), and respiratory arousal events.</li>
+<li><strong>Longitudinal Cardiovascular Outcomes</strong>: Tracking of incident myocardial infarction, angina, coronary revascularization, coronary artery calcium (CAC) score, and cardiovascular death.</li>
+</ul>
+<h4>6. Defensibility of ML Prediction Target</h4>
+<ul>
+<li><strong>Defensibility: HIGH FOR NOCTURNAL HYPOXEMIA &amp; CARDIOVASCULAR RISK</strong>.</li>
+<li><em>Target A (Continuous Hypoxic Stress)</em>: Predicting desaturation severity ($\Delta\text{SpO2}$) and transient vascular vasoconstriction (PPG amplitude drop) during nocturnal breathing cessation.</li>
+<li><em>Target B (Long-term Ischemic Risk)</em>: Stratifying patients with high coronary artery calcium or incident cardiovascular events using overnight autonomic/hypoxemic dynamics.</li>
+<li><em>Caveat</em>: Not an ambulatory exercise stress dataset; reflects overnight nocturnal physiology.</li>
+</ul>
+<h4>7. Sensor Synchronization</h4>
+<ul>
+<li><strong>Synchronization: YES</strong>. During overnight PSG, ECG, finger PPG, and SpO2 are recorded on a single Somte PSG system with shared hardware clock. (7-day actigraphy was recorded separately).</li>
+</ul>
+<h4>8. License and Usage Restrictions</h4>
+<ul>
+<li><strong>License</strong>: NSRR Data Access Agreement. Requires registration, institutional affiliation, research proposal submission, and formal approval.</li>
+</ul>
+<h4>9. Major Limitations</h4>
+<ol>
+<li>Overnight sleep setting (no ambulatory active exercise).</li>
+<li>Wrist actigraphy is separate from the PSG montage.</li>
+<li>Access approval process can take 1–3 weeks.</li>
+</ol>
+<h4>10. Suitability for XGBoost Model</h4>
+<ul>
+<li><strong>Suitability: HIGH (for Hypoxemic-Vascular Stress Coupling)</strong>.</li>
+<li>Excellent for tabular feature extraction: Oxygen Desaturation Index (ODI), pulse wave amplitude drops, PAT variation during desaturations, and cyclic HRV variation.</li>
+</ul>
+<hr />
+<h3>Candidate 8: European ST-T Database (EDB)</h3>
+<h4>1. Exact Dataset Name and Source</h4>
+<ul>
+<li><strong>Name</strong>: European ST-T Database (EDB)</li>
+<li><strong>Source</strong>: PhysioNet (<code>https://physionet.org/content/edb/1.0.0/</code>)</li>
+<li><strong>Citation</strong>: Taddei A, Distante G, Emdin M, et al. <em>The European ST-T Database: standard evaluation of computers for the analysis of ambulatory electrocardiograms.</em> Computers in Cardiology 1992.</li>
+</ul>
+<h4>2. Number of Subjects/Patients</h4>
+<ul>
+<li><strong>79 subjects</strong> (90 annotated 2-hour excerpts).</li>
+</ul>
+<h4>3. Available Signals</h4>
+<ul>
+<li><strong>ECG Only</strong>: 2-lead ambulatory ECG.</li>
+<li><strong>PPG, SpO2, Motion / IMU</strong>: <strong>NONE</strong>.</li>
+</ul>
+<h4>4. Sampling Rates</h4>
+<ul>
+<li><strong>250 Hz</strong>, 12-bit.</li>
+</ul>
+<h4>5. Available Clinical Labels/Outcomes</h4>
+<ul>
+<li>Cardiologist annotations of ischemic ST-segment episodes and T-wave morphology changes.</li>
+</ul>
+<h4>6. Defensibility of ML Prediction Target</h4>
+<ul>
+<li><strong>Defensibility: MODERATE TO HIGH (ECG Ischemia Only)</strong>.</li>
+<li>Historic benchmark for ST-T detection. However, does not isolate heart-rate related ST drift with the same rigor as LTST DB.</li>
+</ul>
+<h4>7. Sensor Synchronization</h4>
+<ul>
+<li><strong>Synchronization</strong>: N/A (ECG only).</li>
+</ul>
+<h4>8. License and Usage Restrictions</h4>
+<ul>
+<li><strong>License</strong>: <strong>PhysioNet Open Access for Non-Commercial Research Only</strong>.</li>
+<li><strong>CRITICAL RESTRICTION</strong>: Explicitly prohibits commercial use. Any commercial testing requires purchasing the proprietary CD-ROM from the original European consortium.</li>
+</ul>
+<h4>9. Major Limitations</h4>
+<ol>
+<li><strong>Commercial prohibition</strong>.</li>
+<li>Only 2-hour excerpts (short duration).</li>
+<li>ECG only (no multimodal signals).</li>
+</ol>
+<h4>10. Suitability for XGBoost Model</h4>
+<ul>
+<li><strong>Suitability: MODERATE (Superseded by LTST DB)</strong>. Due to the commercial restriction and shorter duration, LTST DB is strictly preferred.</li>
+</ul>
+<hr />
+<h2>3. Comprehensive Cross-Dataset Comparison Matrix</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Candidate Dataset</th>
+<th style="text-align: left;">Modalities Available</th>
+<th style="text-align: left;">Sampling Rates</th>
+<th style="text-align: left;">Synchronization Quality</th>
+<th style="text-align: left;">Clinical / Stress Target</th>
+<th style="text-align: left;">Target Defensibility</th>
+<th style="text-align: left;">License / Access Barrier</th>
+<th style="text-align: left;">XGBoost Suitability</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>VitalDB</strong> <em>(PhysioNet / vitaldb.net)</em></td>
+<td style="text-align: left;">ECG, PPG, SpO2, ABP, Numerics <em>(No IMU)</em></td>
+<td style="text-align: left;">ECG: 500 Hz<br>PPG: 100–500 Hz<br>SpO2: 1–7s</td>
+<td style="text-align: left;"><strong>Millisecond hardware sync</strong> across all channels</td>
+<td style="text-align: left;">Post-op Troponin I, MINS, PMI, severe hypotension</td>
+<td style="text-align: left;"><strong>High</strong>: True clinical myocardial injury &amp; hemodynamic collapse</td>
+<td style="text-align: left;"><strong>CC BY 4.0</strong>: Fully open, instant Python access</td>
+<td style="text-align: left;"><strong>Exceptional</strong>: Tabular HRV, PAT, PPG morphology, SpO2 nadir</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Pulse Transit Time (PTT) PPG</strong> <em>(PhysioNet)</em></td>
+<td style="text-align: left;">ECG, multi-site PPG, SpO2, 6-DOF IMU, Pressure</td>
+<td style="text-align: left;"><strong>500 Hz uniform</strong> across all channels</td>
+<td style="text-align: left;"><strong>Perfect hardware sync</strong> (ARM Cortex-M4, &lt;2ms)</td>
+<td style="text-align: left;">Exertion states (Rest, Walk, Run); Pre/post BP &amp; SpO2</td>
+<td style="text-align: left;"><strong>High for Exertion/Motion; ZERO for Ischemia</strong> (Healthy cohort)</td>
+<td style="text-align: left;"><strong>ODbL 1.0</strong>: Open access on PhysioNet</td>
+<td style="text-align: left;"><strong>High</strong>: Feature extraction under motion, PTT/PAT, noise gating</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Long-Term ST (LTST DB)</strong> <em>(PhysioNet)</em></td>
+<td style="text-align: left;">ECG only (2–3 leads) <em>(No PPG, SpO2, IMU)</em></td>
+<td style="text-align: left;">250 Hz, 12-bit</td>
+<td style="text-align: left;">N/A (ECG only)</td>
+<td style="text-align: left;">Cardiologist-annotated ischemic ST episodes vs HR/postural shifts</td>
+<td style="text-align: left;"><strong>Gold Standard</strong>: Definitive ambulatory myocardial ischemia</td>
+<td style="text-align: left;"><strong>PhysioNet Open</strong>: Free research access</td>
+<td style="text-align: left;"><strong>Excellent</strong>: Pure ECG repolarization feature vectors</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>STAFF III Database</strong> <em>(PhysioNet)</em></td>
+<td style="text-align: left;">12-lead ECG only <em>(No PPG, SpO2, IMU)</em></td>
+<td style="text-align: left;">1000 Hz diagnostic</td>
+<td style="text-align: left;">N/A (ECG only)</td>
+<td style="text-align: left;">PTCA balloon inflation (acute transmural occlusion), vessel site</td>
+<td style="text-align: left;"><strong>Gold Standard</strong>: Controlled zero-flow acute ischemia</td>
+<td style="text-align: left;"><strong>Restricted</strong>: Requires CITI training, DUA &amp; credentialing</td>
+<td style="text-align: left;"><strong>High</strong>: 12-lead ST vector magnitude, QRS power</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>MIMIC-III Waveform Matched</strong> <em>(PhysioNet)</em></td>
+<td style="text-align: left;">ECG, PPG, SpO2, ABP <em>(No IMU)</em></td>
+<td style="text-align: left;">Waveforms: 125 Hz<br>SpO2: 1/min</td>
+<td style="text-align: left;">Verified waveform synchronization</td>
+<td style="text-align: left;">ICD-9 Acute MI, Troponin T/I, ICU mortality</td>
+<td style="text-align: left;"><strong>Moderate-High</strong>: In-hospital cardiac outcomes (noisy timing)</td>
+<td style="text-align: left;"><strong>ODbL 1.0 / Restricted</strong>: Credentialing &amp; DUA required</td>
+<td style="text-align: left;"><strong>Moderate</strong>: Large cohort, but 125 Hz downsampling limits PAT</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>WESAD</strong> <em>(UCI / Siegen)</em></td>
+<td style="text-align: left;">ECG, PPG, EDA, EMG, ACC <em>(No SpO2)</em></td>
+<td style="text-align: left;">Chest: 700 Hz<br>Wrist PPG: 64 Hz</td>
+<td style="text-align: left;">Synchronized via cross-correlation</td>
+<td style="text-align: left;">Psychological stress (TSST), Amusement, Meditation</td>
+<td style="text-align: left;"><strong>Invalid for Ischemia</strong>: Measures autonomic sympathetic tone</td>
+<td style="text-align: left;"><strong>Open Academic</strong>: Free download</td>
+<td style="text-align: left;"><strong>Poor for Cardiac Ischemia</strong>; High for affective stress</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>MESA Sleep</strong> <em>(NSRR / NIH)</em></td>
+<td style="text-align: left;">ECG, PPG, SpO2, Respiration, Actigraphy</td>
+<td style="text-align: left;">ECG/PPG: 256 Hz<br>SpO2: 1 Hz</td>
+<td style="text-align: left;">Hardware synchronized on Somte PSG</td>
+<td style="text-align: left;">Apnea/hypopnea desaturations, incident MI, CAC score</td>
+<td style="text-align: left;"><strong>High</strong>: Hypoxic burden &amp; long-term ischemic risk</td>
+<td style="text-align: left;"><strong>NSRR DUA</strong>: Requires formal research application</td>
+<td style="text-align: left;"><strong>High</strong>: Nocturnal hypoxic stress &amp; vascular coupling</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>European ST-T (EDB)</strong> <em>(PhysioNet)</em></td>
+<td style="text-align: left;">ECG only (2 leads) <em>(No PPG, SpO2, IMU)</em></td>
+<td style="text-align: left;">250 Hz, 12-bit</td>
+<td style="text-align: left;">N/A (ECG only)</td>
+<td style="text-align: left;">Ischemic ST and T-wave changes (cardiologist annotated)</td>
+<td style="text-align: left;"><strong>Moderate-High</strong>: Classic ECG ischemia</td>
+<td style="text-align: left;"><strong>Restricted</strong>: <strong>No commercial use permitted</strong></td>
+<td style="text-align: left;"><strong>Moderate</strong>: Superseded by LTST DB</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>4. Recommended Shortlist &amp; Strategic Trade-Offs</h2>
+<p>To construct a scientifically rigorous, defensible prototype for BeatAhead without falling into the trap of inventing missing labels or conflating healthy exercise with myocardial ischemia, we recommend a <strong>shortlist of three complementary datasets</strong>:</p>
+<pre><code>+----------------------------------------------------------------------------------------------------+
+|                             RECOMMENDED BEATAHEAD DATASET PORTFOLIO                                |
++------------------------------------+----------------------------------+----------------------------+
+| Role in Prototype Pipeline         | Recommended Candidate Dataset    | Primary Value Proposition  |
++------------------------------------+----------------------------------+----------------------------+
+| Track 1: Multimodal Signals &amp;      | Primary: VitalDB                 | Synchronized ECG+PPG+SpO2  |
+|          Clinical Cardiac Outcomes |                                  | with verified Troponin /   |
+|                                    |                                  | MINS outcomes (CC BY 4.0)  |
++------------------------------------+----------------------------------+----------------------------+
+| Track 2: Wearable Multimodal       | Primary: Pulse Transit Time PPG  | Hardware-synchronized 500Hz|
+|          Motion &amp; PTT Engineering  |          (PTT PPG)               | ECG+PPG+SpO2+6-DOF IMU     |
+|                                    |                                  | under exercise exertion    |
++------------------------------------+----------------------------------+----------------------------+
+| Track 3: Diagnostic ECG Ischemia   | Primary: Long-Term ST Database   | Definitive gold-standard   |
+|          Algorithm Positive Control|          (LTST DB)               | cardiologist annotations   |
+|                                    |                                  | of transient ST ischemia   |
++------------------------------------+----------------------------------+----------------------------+
+</code></pre>
+<hr />
+<h3>Candidate A (Primary Multimodal Clinical Target): <strong>VitalDB</strong></h3>
+<ul>
+<li><strong>Why it is Recommended</strong>:</li>
+<li>It is the <strong>only open-access dataset</strong> that simultaneously provides high-resolution ECG (500 Hz), continuous finger PPG (100–500 Hz), and continuous SpO2, coupled with <strong>verified laboratory cardiac biomarkers (Troponin I)</strong> and acute myocardial infarction / MINS outcomes.</li>
+<li>It eliminates the barrier of PhysioNet credentialing delays because it is released under <strong>CC BY 4.0</strong>.</li>
+<li>The <code>vitaldb</code> Python API enables frictionless pipeline development and rapid windowed feature extraction.</li>
+<li><strong>Trade-Offs &amp; Limitations</strong>:</li>
+<li><strong>No Motion/IMU</strong>: Data was recorded in operating suites under anesthesia. You cannot evaluate accelerometer noise gating or ambulatory motion artifacts using VitalDB alone.</li>
+<li><strong>Medication Effects</strong>: Anesthetic agents and vasopressors modulate vascular compliance and heart rate dynamics.</li>
+<li><strong>Role in BeatAhead</strong>: Serves as the primary ground truth for training XGBoost models on multimodal physiological coupling (ECG-PPG Pulse Arrival Time, pulse wave morphology, and SpO2 variations) to predict myocardial injury and acute hemodynamic collapse.</li>
+</ul>
+<hr />
+<h3>Candidate B (Primary Wearable Hardware &amp; Motion Benchmark): <strong>Pulse Transit Time (PTT) PPG Dataset</strong></h3>
+<ul>
+<li><strong>Why it is Recommended</strong>:</li>
+<li>Provides the exact sensor configuration proposed for the BeatAhead wearable hardware: <strong>ECG + multi-wavelength PPG + SpO2 + 6-DOF IMU (Accelerometer and Gyroscope)</strong>.</li>
+<li>All signals are sampled at a pristine <strong>500 Hz uniform rate</strong> with millisecond hardware synchronization.</li>
+<li>Captures realistic motion artifacts across three distinct exercise exertion intensities: sitting, walking (4 km/h), and running (8 km/h).</li>
+<li><strong>Trade-Offs &amp; Limitations</strong>:</li>
+<li><strong>ZERO Ischemia</strong>: Subjects are young, healthy individuals. It <strong>cannot</strong> be used to claim ischemia detection.</li>
+<li>Pre- and post-activity SpO2 and blood pressure are discrete measurements rather than continuous waveform tracks.</li>
+<li><strong>Role in BeatAhead</strong>: Serves as the benchmark for:
+  1. IMU-based motion artifact detection and signal quality indexing (SQI).
+  2. Pulse Arrival Time (PAT) extraction algorithms under active locomotion.
+  3. Classifying exercise-induced metabolic workload and physical exertion.</li>
+</ul>
+<hr />
+<h3>Candidate C (Primary ECG Ischemia Gold-Standard Positive Control): <strong>Long-Term ST Database (LTST DB)</strong></h3>
+<ul>
+<li><strong>Why it is Recommended</strong>:</li>
+<li>Unrivaled clinical validity for ambulatory ECG ischemia.</li>
+<li>86 full 24-hour recordings with meticulously adjudicated ischemic ST episodes, differentiating true ischemia from heart-rate related ST drift and positional body shifts.</li>
+<li>Fully open access on PhysioNet without commercial restrictions (unlike the European ST-T database).</li>
+<li><strong>Trade-Offs &amp; Limitations</strong>:</li>
+<li><strong>Unimodal</strong>: Zero PPG, SpO2, or IMU channels.</li>
+<li><strong>Role in BeatAhead</strong>: Serves as the independent positive-control benchmark to validate BeatAhead's ECG feature engineering sub-module (ST amplitude, ST slope, T-wave alternans, HRV). Proves that the ML pipeline can accurately detect true ischemic repolarization shifts on standard clinical data before fusing with peripheral sensors.</li>
+</ul>
+<hr />
+<h2>5. Engineered Physiological Feature Blueprint for XGBoost</h2>
+<p>For the BeatAhead prototype, XGBoost will consume tabular feature vectors extracted across sliding analysis windows (e.g., 30-second windows with 50% overlap). The feature engineering blueprint across the shortlisted datasets is structured as follows:</p>
+<pre><code>+----------------------------------------------------------------------------------------------------+
+|                                  ENGINEERED FEATURE TAXONOMY                                       |
++----------------------+-----------------------------------------------------------------------------+
+| Domain               | Specific Engineered Features for XGBoost Matrix                             |
++----------------------+-----------------------------------------------------------------------------+
+| 1. ECG Repolarization| - ST-segment deviation amplitude at J+60ms and J+80ms (mV)                  |
+|    &amp; Morphology      | - ST slope angle (degrees / classification: horizontal, down, up)          |
+|    (Ischemia Core)   | - T-wave peak amplitude, polarity, and T-wave asymmetry index               |
+|                      | - QRS duration (ms) and QRS energy in 150–250 Hz band (fragmentation)       |
+|                      | - QT and QTc (Bazett-corrected) intervals                                   |
++----------------------+-----------------------------------------------------------------------------+
+| 2. Autonomic / HRV   | - Time-Domain: Mean HR, SDNN, RMSSD, pNN50                                  |
+|    (Autonomic Tone)  | - Frequency-Domain: VLF, LF (0.04–0.15 Hz), HF (0.15–0.40 Hz), LF/HF ratio  |
+|                      | - Non-Linear: Sample Entropy, Poincaré SD1, SD2, SD1/SD2 ratio              |
++----------------------+-----------------------------------------------------------------------------+
+| 3. Vascular &amp; Pulse  | - Pulse Arrival Time (PAT): Time from ECG R-peak to PPG systolic peak (ms)  |
+|    Dynamics (PPG)    | - Pulse Transit Time to foot: Time from ECG R-peak to PPG foot (ms)         |
+|                      | - PPG Crest Time (time from foot to systolic peak)                          |
+|                      | - Augmentation Index proxy (reflection height / primary peak height)        |
+|                      | - Pulse Area Ratio and dP/dt maximum systolic upslope                       |
+|                      | - Perfusion Index (AC amplitude / DC baseline)                              |
++----------------------+-----------------------------------------------------------------------------+
+| 4. Oximetry Dynamics | - Mean SpO2 and minimum SpO2 nadir in window                                |
+|    (SpO2)            | - Oxygen Desaturation Index (number of drops &gt;= 3% or 4% per hour)          |
+|                      | - Desaturation Area / Hypoxic Burden (%·min below 90% threshold)            |
+|                      | - SpO2 variance and recovery slope following nadir                          |
++----------------------+-----------------------------------------------------------------------------+
+| 5. Motion Kinematics | - 3-axis Accelerometer Vector Magnitude: SVM = sqrt(Ax^2 + Ay^2 + Az^2)     |
+|    &amp; Signal Quality  | - Movement Intensity: Root Mean Square (RMS) of jerk / bandpassed ACC       |
+|    (IMU Gating)      | - Dominant movement cadence / frequency (step rate via FFT)                 |
+|                      | - Signal Quality Index (SQI): PPG skewness, kurtosis, template correlation  |
++----------------------+-----------------------------------------------------------------------------+
+</code></pre>
+<hr />
+<h2>6. Synthesis &amp; Next Steps for BeatAhead</h2>
+<ol>
+<li><strong>Do Not Claim Wearable Ischemia on Healthy Volunteer Data</strong>:
+   * When using the <strong>PTT PPG</strong> or <strong>WESAD</strong> datasets, define the prediction target explicitly as <strong>Physical Workload / Exercise Exertion State</strong> or <strong>Autonomic Arousal</strong>. Do not claim these models predict myocardial ischemia.</li>
+<li><strong>Train the Cardiac Injury / Hemodynamic Model on VitalDB</strong>:
+   * Download a curated cohort of surgical cases from VitalDB with synchronized ECG, PPG, and SpO2 tracks along with post-operative Troponin I levels.
+   * Extract the engineered features above to build an XGBoost model predicting myocardial injury (cTnI elevation) and acute hemodynamic decompensation.</li>
+<li><strong>Validate ECG Ischemic Sensitivity on LTST DB</strong>:
+   * Validate the ECG feature extractor on the LTST DB to establish sensitivity and specificity against adjudicated ischemic ST episodes.</li>
+<li><strong>Develop IMU Noise Gating on PTT PPG</strong>:
+   * Use the PTT PPG dataset to calibrate an XGBoost Signal Quality Index (SQI) model that detects when motion artifacts corrupt PPG/ECG signals during walking and running, preventing false-positive alarm triggers.</li>
+</ol>
+<p>This staged approach ensures that the BeatAhead prototype is scientifically unimpeachable, respects medical reality, and establishes a robust multimodal machine learning architecture.</p>
+<div class="footer">BeatAhead Cardiac Physiological ML Prototype &bull; Confidential &bull; Generated from reports/dataset_research.md</div>
+</body>
+</html>

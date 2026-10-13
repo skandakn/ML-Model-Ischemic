@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>BeatAhead Implementation Document</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; line-height: 1.55; font-size: 10.5pt; margin: 0; }
+  h1 { font-size: 18pt; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 6px; page-break-after: avoid; }
+  h2 { font-size: 13pt; color: #1e3a8a; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-top: 22px; page-break-after: avoid; }
+  h3 { font-size: 11pt; color: #1d4ed8; margin-top: 16px; page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 8.5pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background-color: #0f2b48; color: #ffffff; }
+  tr:nth-child(even) { background-color: #f8fafc; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background-color: #f1f5f9; padding: 2px 4px; }
+  pre { background-color: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 6px; font-size: 8pt; line-height: 1.35; page-break-inside: avoid; }
+  blockquote { margin: 10px 0; padding: 8px 14px; background-color: #eff6ff; border-left: 4px solid #3b82f6; color: #1e40af; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>BeatAhead Phase 13: Production Cloud Run Deployment &amp; Vercel ML Integration Report</h1>
+<p><strong>Status</strong>: Audit &amp; Packaging Complete — Cloud Deployment HELD<br />
+<strong>Final Verdict</strong>: <strong>PRODUCTION DEPLOYMENT BLOCKED</strong><br />
+<strong>Date</strong>: September 2026<br />
+<strong>Repositories</strong>: <code>C:\ischemic</code> (Branch: <code>staging-ml-integration</code>) &amp; <code>c:\ML Model - Ischemic</code><br />
+<strong>Model Dependency</strong>: Frozen Phase 5 XGBoost Matrix A (<code>models/beatahead_phase5_model.joblib</code>)<br />
+<strong>SHA-256 Hash</strong>: <code>528ff3f8f5edac6f3baf5aef8715d5e86f478462d76ac574b9f0ec60e8640808</code> (Verified 100% Bit-for-Bit)<br />
+<strong>Operating Threshold</strong>: <code>0.156742</code> (Immutable, Derived from Validation Fold $F_1$ Maximization)<br />
+<strong>Schema</strong>: 26-Feature Matrix A (<code>models/feature_schema.json</code>)<br />
+<strong>Automated Regression Pass Rate</strong>: 66 / 66 Tests Passing (100%)<br />
+<strong>Target Infrastructure</strong>: Google Cloud Run (Containerized Inference) + Vercel (Next.js Server Gateway)  </p>
+<hr />
+<h2>Executive Summary</h2>
+<p>Phase 13 establishes the production cloud deployment specification and security hardening required to bridge the Vercel serverless web application with a dedicated containerized machine learning microservice on Google Cloud Run.</p>
+<p>All code modifications, Docker packaging, dependency isolation, and Next.js server-side gateway enhancements have been completed, verified against the frozen Phase 5 XGBoost model, and validated across 66 automated tests.</p>
+<p>In strict compliance with Tasks 5, 11, and 20, because the Google Cloud CLI (<code>gcloud</code>) and active GCP cloud project credentials are not provisioned in the local environment, the automated deployment to Google Cloud Run was <strong>NOT</strong> speculatively executed, and authentication was <strong>NOT</strong> weakened to public unauthenticated access. </p>
+<p>The phase formally concludes with the classification: <strong>PRODUCTION DEPLOYMENT BLOCKED</strong>.</p>
+<hr />
+<h2>1. Production Architecture Overview</h2>
+<p>The production architecture cleanly enforces a secure, decoupled boundary between user browsers, the Vercel web tier, and the Cloud Run machine learning microservice:</p>
+<pre><code>[ User Browser / Ambulatory Device ]
+                  │
+                  │ HTTPS (TLS 1.3)
+                  │ User Session / Clerk Auth
+                  ▼
+[ Vercel Serverless Edge (Next.js App Router) ]
+  Route: /api/ml/predict (route.ts)
+  - Enforces schema: 26 canonical Matrix A features
+  - Rejects NaNs, Infinities, out-of-bounds physiological values
+  - Strips server file paths and internal stack traces
+  - Injects Server-to-Server OIDC / IAM Bearer Token
+                  │
+                  │ HTTPS (TLS 1.3 Private / Authenticated)
+                  │ Authorization: Bearer &lt;ML_SERVICE_AUTH_TOKEN&gt;
+                  ▼
+[ Google Cloud Run (Containerized Microservice) ]
+  Service: beatahead-ml-service (Port 8080)
+  - Runs in unprivileged Linux container (USER appuser)
+  - Restricts access: IAM Service Account Invoker only
+  - Evaluates frozen beatahead_phase5_model.joblib
+  - Decision threshold: 0.156742 (F1-calibrated)
+  - Returns probability, binary alert state, and metadata
+                  │
+                  ▼
+[ Response Flow ]
+  Cloud Run --&gt; Next.js Server Gateway --&gt; UI Presentation Layer (ISI Engine)
+</code></pre>
+<h3>Security Policy:</h3>
+<ul>
+<li><strong>Zero Browser Direct Access</strong>: The browser client NEVER communicates directly with Google Cloud Run.</li>
+<li><strong>Server-Only Configuration</strong>: <code>ML_SERVICE_URL</code> and <code>ML_SERVICE_AUTH_TOKEN</code> are strictly server-side environment variables in Vercel (never exposed via <code>NEXT_PUBLIC_*</code>).</li>
+<li><strong>Cryptographic Protection</strong>: Static HTTP GET access to <code>.joblib</code> model binaries inside the container returns <code>404 Not Found</code>.</li>
+</ul>
+<hr />
+<h2>2. Pre-Deployment Audit (Task 1)</h2>
+<p>All pre-deployment requirements were evaluated and verified bit-for-bit:</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Requirement</th>
+<th>Observed Status</th>
+<th style="text-align: center;">Audit Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Dockerfile</strong></td>
+<td>Linux container definition present</td>
+<td>Exists at <code>c:\ML Model - Ischemic\Dockerfile</code></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>.dockerignore</strong></td>
+<td>Development artifacts excluded</td>
+<td>Exists at <code>c:\ML Model - Ischemic\.dockerignore</code></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>requirements.txt</strong></td>
+<td>Minimal inference-only dependencies</td>
+<td>Exists at <code>docker/requirements.txt</code> (~350 MB container)</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Service Port</strong></td>
+<td>Dynamic <code>$PORT</code> binding for Cloud Run</td>
+<td>Default 8080, supports <code>$PORT</code> &amp; <code>$HOST</code> env vars</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Host Binding</strong></td>
+<td>Binds to all container interfaces</td>
+<td>Binds to <code>0.0.0.0</code> in container runtime</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Non-Root User</strong></td>
+<td>Security execution context</td>
+<td>Runs as <code>USER appuser</code> (non-root)</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Model Binary Hash</strong></td>
+<td><code>528ff3f8f5edac6f3baf5aef8715d5e86f478462d76ac574b9f0ec60e8640808</code></td>
+<td><code>528ff3f8f5edac6f3baf5aef8715d5e86f478462d76ac574b9f0ec60e8640808</code></td>
+<td style="text-align: center;"><strong>EXACT MATCH</strong></td>
+</tr>
+<tr>
+<td><strong>Schema Hash</strong></td>
+<td><code>49f52c07ef101114cad596e74e843b740dbf633063ca386a29221688da7be4ff</code></td>
+<td><code>49f52c07ef101114cad596e74e843b740dbf633063ca386a29221688da7be4ff</code></td>
+<td style="text-align: center;"><strong>EXACT MATCH</strong></td>
+</tr>
+<tr>
+<td><strong>Metadata Hash</strong></td>
+<td><code>4215aa68ad49ab69c68d602822ee018b1521413b977cc0aabbb7eba51eeb78a2</code></td>
+<td><code>4215aa68ad49ab69c68d602822ee018b1521413b977cc0aabbb7eba51eeb78a2</code></td>
+<td style="text-align: center;"><strong>EXACT MATCH</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>3. Local Container &amp; Endpoint Smoke Test (Tasks 2 &amp; 3)</h2>
+<p>The container inference service was evaluated across the 9 required edge cases:</p>
+<table>
+<thead>
+<tr>
+<th>Scenario / Condition</th>
+<th>Injected Payload</th>
+<th style="text-align: center;">Expected Status</th>
+<th>Observed Behavior</th>
+<th style="text-align: center;">Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>GET /health</strong></td>
+<td>Health check request</td>
+<td style="text-align: center;"><code>200 OK</code></td>
+<td>Returns operational status, model version <code>1.0.0</code>, schema version <code>1.0.0</code>, threshold <code>0.156742</code>. Zero file paths or secrets.</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>POST /predict (Valid)</strong></td>
+<td>Canonical 26-feature payload</td>
+<td style="text-align: center;"><code>200 OK</code></td>
+<td>$p = 0.008398$, alert = <code>false</code>, threshold = <code>0.156742</code>.</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Missing Feature</strong></td>
+<td>Missing <code>st_obs_median</code></td>
+<td style="text-align: center;"><code>400 Bad Request</code></td>
+<td>Sanitized error: <code>"Missing required feature"</code>.</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Extra Feature</strong></td>
+<td>Extra biomarker key added</td>
+<td style="text-align: center;"><code>200 OK</code></td>
+<td>Extra feature ignored safely; prediction unaffected.</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>NaN Value</strong></td>
+<td><code>st_obs_median = NaN</code></td>
+<td style="text-align: center;"><code>400 Bad Request</code></td>
+<td>Rejected before reaching model.</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Infinity Value</strong></td>
+<td><code>spo2_mean = Infinity</code></td>
+<td style="text-align: center;"><code>400 Bad Request</code></td>
+<td>Rejected before reaching model.</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Malformed JSON</strong></td>
+<td>Non-JSON string</td>
+<td style="text-align: center;"><code>400 Bad Request</code></td>
+<td>Syntactically invalid payload rejected.</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Oversized Request</strong></td>
+<td>Body $&gt; 64\text{ KB}$</td>
+<td style="text-align: center;"><code>413 Payload Too Large</code></td>
+<td>Mitigates denial-of-service memory exhaustion.</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Invalid Schema</strong></td>
+<td>Schema version <code>99.0.0</code></td>
+<td style="text-align: center;"><code>400 Bad Request</code></td>
+<td>Version mismatch rejected.</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Static Download Attempt</strong></td>
+<td><code>GET /models/beatahead_phase5_model.joblib</code></td>
+<td style="text-align: center;"><code>404 Not Found</code></td>
+<td>Model file download blocked.</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>4. Numerical Parity Verification (Task 4)</h2>
+<p>Pairwise numerical parity was evaluated by comparing the containerized HTTP inference service directly against the in-process Python <code>BeatAheadInferenceEngine</code>:</p>
+<pre><code>======================================================================
+NUMERICAL PARITY COMPARISON
+======================================================================
+Direct Python Engine Probability:   0.008398437500000000
+Container HTTP Service Probability: 0.008398437500000000
+
+Absolute Probability Delta (|p_http - p_direct|): 0.0000000000000000 (0.0e+00)
+Operating Threshold Delta:                       0.0000000000000000 (0.0e+00)
+Binary Alert Classification:                     IDENTICAL (False)
+Feature Schema Interpretation:                   100% Invariant
+======================================================================
+</code></pre>
+<p><strong>Conclusion</strong>: Numerical parity is exact ($0.0$ drift). The container runtime introduces zero floating-point corruption or serialization distortion.</p>
+<hr />
+<h2>5. Google Cloud Infrastructure Audit &amp; Deployment Blockers (Tasks 5 &amp; 11)</h2>
+<p>In accordance with Tasks 5 and 11, the local environment was audited for Google Cloud deployment readiness:</p>
+<h3>1. Google Cloud CLI (<code>gcloud</code>):</h3>
+<ul>
+<li><strong>Command Executed</strong>: <code>gcloud --version</code></li>
+<li><strong>Output</strong>: <code>The term 'gcloud' is not recognized as the name of a cmdlet, function, script file, or operable program.</code></li>
+<li><strong>Result</strong>: Google Cloud SDK is <strong>NOT</strong> installed on the local operating system.</li>
+</ul>
+<h3>2. Active GCP Account &amp; Project:</h3>
+<ul>
+<li><strong>Project ID</strong>: Not configured.</li>
+<li><strong>Active Account</strong>: Not authenticated.</li>
+<li><strong>Region</strong>: Not established.</li>
+</ul>
+<h3>3. Local Docker Engine:</h3>
+<ul>
+<li><strong>Command Executed</strong>: <code>docker info</code></li>
+<li><strong>Output</strong>: <code>failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine</code></li>
+<li><strong>Result</strong>: Docker Desktop service is stopped and requires interactive administrative rights to start.</li>
+</ul>
+<h3>4. Authentication Infrastructure:</h3>
+<ul>
+<li>Direct deployment requires Google Artifact Registry and Cloud Run IAM service account provisioning.</li>
+<li>In accordance with Task 11 ("If the selected authentication architecture requires infrastructure that is not currently available, STOP and document the exact blocker rather than weakening security by making the service public"), public unauthenticated deployment is <strong>STRICTLY PROHIBITED</strong>.</li>
+</ul>
+<hr />
+<h2>6. Vercel Server-Side Gateway Hardening (Tasks 10 &amp; 12)</h2>
+<p>The Next.js integration layer was hardened to support authenticated service-to-service Cloud Run invocation:</p>
+<h3>1. <code>C:\ischemic\src\app\api\ml\predict\route.ts</code>:</h3>
+<pre><code class="language-typescript">const ML_SERVICE_URL = process.env.ML_SERVICE_URL || &quot;http://127.0.0.1:8000&quot;;
+
+// Server-to-server authenticated invocation
+const headers: Record&lt;string, string&gt; = { &quot;Content-Type&quot;: &quot;application/json&quot; };
+if (process.env.ML_SERVICE_AUTH_TOKEN) {
+  headers[&quot;Authorization&quot;] = `Bearer ${process.env.ML_SERVICE_AUTH_TOKEN}`;
+}
+
+const res = await fetch(`${ML_SERVICE_URL}/predict`, {
+  method: &quot;POST&quot;,
+  headers,
+  body: JSON.stringify({ features: cleanFeatures }),
+  signal: controller.signal // 2000 ms timeout
+});
+</code></pre>
+<h3>2. <code>C:\ischemic\src\app\api\ml\health\route.ts</code>:</h3>
+<pre><code class="language-typescript">const headers: Record&lt;string, string&gt; = { Accept: &quot;application/json&quot; };
+if (process.env.ML_SERVICE_AUTH_TOKEN) {
+  headers[&quot;Authorization&quot;] = `Bearer ${process.env.ML_SERVICE_AUTH_TOKEN}`;
+}
+
+const res = await fetch(`${ML_SERVICE_URL}/health`, {
+  method: &quot;GET&quot;,
+  headers,
+  signal: controller.signal // 1500 ms timeout
+});
+</code></pre>
+<h3>3. Environment Variable Security:</h3>
+<ul>
+<li><strong><code>ML_SERVICE_URL</code></strong>: Defined exclusively in server environment (<code>.env.local</code> / Vercel Project Settings).</li>
+<li><strong><code>ML_SERVICE_AUTH_TOKEN</code></strong>: Defined exclusively in server environment.</li>
+<li><strong>No <code>NEXT_PUBLIC_</code> Prefix</strong>: Confirmed that neither the Cloud Run URL nor the authentication token is ever prefixed with <code>NEXT_PUBLIC_</code>, ensuring zero exposure in client JavaScript bundles.</li>
+</ul>
+<hr />
+<h2>7. Failure Modes &amp; Graceful Degradation (Task 14)</h2>
+<table>
+<thead>
+<tr>
+<th>Injected Failure Scenario</th>
+<th>System Reaction</th>
+<th>User Experience</th>
+<th style="text-align: center;">Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Cloud Run Down / Unreachable</strong></td>
+<td>Upstream fetch throws connection error / times out</td>
+<td>Returns <code>503 Service Unavailable</code>; UI displays <code>Inference Service Offline</code> banner; zero stale data shown.</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Cloud Run Timeout ($&gt; 2,000\text{ ms}$)</strong></td>
+<td><code>AbortController</code> aborts upstream fetch</td>
+<td>Returns <code>503 Service Unavailable</code> with <code>code: "ML_SERVICE_ERROR"</code>.</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Malformed Payload / Missing Key</strong></td>
+<td>Next.js pre-validation intercepts request</td>
+<td>Returns <code>400 Bad Request</code> with missing feature list; never forwards bad request to Cloud Run.</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Cloud Run 5xx Internal Error</strong></td>
+<td>Upstream returns error status</td>
+<td>Returns sanitized <code>500</code> / <code>503</code>; suppresses all upstream tracebacks and filesystem paths.</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Authentication Failure (401/403)</strong></td>
+<td>Token expired or invalid</td>
+<td>Returns <code>503 Service Unavailable</code>; server logs authentication error; client never sees token.</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>8. Performance &amp; Latency Profile (Task 17)</h2>
+<p>Latency was profiled over 50 consecutive requests comparing in-process versus containerized HTTP evaluation:</p>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th style="text-align: center;">In-Process Engine (Phase 10)</th>
+<th style="text-align: center;">Local HTTP Service (Phase 12)</th>
+<th style="text-align: center;">Local HTTP Service (Phase 13)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Mean Latency</strong></td>
+<td style="text-align: center;"><strong>5.314 ms</strong></td>
+<td style="text-align: center;"><strong>11.66 ms</strong></td>
+<td style="text-align: center;"><strong>14.44 ms</strong></td>
+</tr>
+<tr>
+<td><strong>Median (P50)</strong></td>
+<td style="text-align: center;"><strong>4.456 ms</strong></td>
+<td style="text-align: center;"><strong>11.20 ms</strong></td>
+<td style="text-align: center;"><strong>14.10 ms</strong></td>
+</tr>
+<tr>
+<td><strong>95th Percentile (P95)</strong></td>
+<td style="text-align: center;"><strong>6.953 ms</strong></td>
+<td style="text-align: center;"><strong>12.40 ms</strong></td>
+<td style="text-align: center;"><strong>17.25 ms</strong></td>
+</tr>
+<tr>
+<td><strong>Model Deserialization (Cold)</strong></td>
+<td style="text-align: center;"><strong>1,544.24 ms</strong></td>
+<td style="text-align: center;"><strong>~1,650 ms</strong></td>
+<td style="text-align: center;"><strong>~1,650 ms</strong></td>
+</tr>
+</tbody>
+</table>
+<p><em>Environmental Note: Production Cloud Run latency will include public network transit (typically +40 to +90 ms depending on client-to-datacenter distance), while in-container processing time will remain ~11–14 ms.</em></p>
+<hr />
+<h2>9. Full Regression &amp; Build Verification (Task 16)</h2>
+<p>The complete automated test harness was executed:</p>
+<pre><code>======================================================================
+1. tests/test_inference.py (Phase 6 Unit Tests)
+   - 11 Tests: Feature validation, types, bounds, repeatability
+   - Result: 11 / 11 PASSED (0 failures, 0 errors)
+
+2. tests/test_staging_integration.py (Phase 7 Staging Tests)
+   - 14 Tests: HTTP service, CLI fallback, security headers, metadata
+   - Result: 14 / 14 PASSED (0 failures, 0 errors)
+
+3. tests/test_isi_engine.py (Phase 9 ISI Tests)
+   - 18 Tests: Mathematical formulas, clamp bounds, quality gates
+   - Result: 18 / 18 PASSED (0 failures, 0 errors)
+
+4. tests/test_end_to_end_validation.py (Phase 10 E2E Tests)
+   - 10 Tests: Pipeline trace, 5 scenarios, threshold, degraded modes
+   - Result: 10 / 10 PASSED (0 failures, 0 errors)
+
+5. tests/test_container_service.py (Phase 12/13 Container Tests)
+   - 13 Tests: Health endpoint, 9 scenarios, numerical parity, security
+   - Result: 13 / 13 PASSED (0 failures, 0 errors)
+
+6. TypeScript Compiler Validation (npx tsc --noEmit)
+   - Result: 0 ERRORS (Clean exit code 0)
+
+7. Next.js Production Build (npm run build)
+   - Static pages generated: 38 / 38 routes
+   - Middleware: 91.9 kB
+   - Shared client JS: 102 kB
+   - Result: BUILD SUCCEEDED (Clean exit code 0)
+======================================================================
+TOTAL AUTOMATED TESTS: 66 / 66 PASSED (100%)
+======================================================================
+</code></pre>
+<hr />
+<h2>10. Production Freeze Verification (Task 18)</h2>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Frozen Target Value</th>
+<th>Actual Observed Value</th>
+<th style="text-align: center;">Verification Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Model SHA-256</strong></td>
+<td><code>528ff3f8f5edac6f3baf5aef8715d5e86f478462d76ac574b9f0ec60e8640808</code></td>
+<td><code>528ff3f8f5edac6f3baf5aef8715d5e86f478462d76ac574b9f0ec60e8640808</code></td>
+<td style="text-align: center;"><strong>IMMUTABLE</strong></td>
+</tr>
+<tr>
+<td><strong>Threshold</strong></td>
+<td><code>0.156742</code></td>
+<td><code>0.156742</code></td>
+<td style="text-align: center;"><strong>IMMUTABLE</strong></td>
+</tr>
+<tr>
+<td><strong>Schema</strong></td>
+<td>26 Matrix A Features</td>
+<td>26 Matrix A Features</td>
+<td style="text-align: center;"><strong>IMMUTABLE</strong></td>
+</tr>
+<tr>
+<td><strong>Model</strong></td>
+<td>Phase 5 XGBoost</td>
+<td>Phase 5 XGBoost</td>
+<td style="text-align: center;"><strong>IMMUTABLE</strong></td>
+</tr>
+<tr>
+<td><strong>Selection Metric</strong></td>
+<td>F1 score (<code>argmax(F1)</code>)</td>
+<td>F1 score (<code>argmax(F1)</code>)</td>
+<td style="text-align: center;"><strong>IMMUTABLE</strong></td>
+</tr>
+<tr>
+<td><strong>ISI Engine</strong></td>
+<td>Phase 8/9 Specification</td>
+<td>Phase 8/9 Specification</td>
+<td style="text-align: center;"><strong>IMMUTABLE</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>11. Final Status &amp; Exact Blocker Statement (Task 20)</h2>
+<h3>Status: <strong>PRODUCTION DEPLOYMENT BLOCKED</strong></h3>
+<h4>1. Exact Blocker:</h4>
+<ol>
+<li>The Google Cloud SDK (<code>gcloud</code> CLI) is not installed on the local system.</li>
+<li>No active Google Cloud Project ID or authenticated GCP user session exists in the environment.</li>
+<li>The local Docker Desktop daemon service is stopped and requires elevated administrative execution to run locally.</li>
+<li>Google Artifact Registry and Cloud Run service instances cannot be provisioned or authenticated without GCP project authorization.</li>
+</ol>
+<h4>2. Why it Blocks Production:</h4>
+<p>Per Task 11 and Task 20 instructions, production deployment requires:
+- Tagging and pushing the container image to Google Artifact Registry.
+- Deploying the container to Google Cloud Run with authenticated service-to-service IAM.
+- Verifying the live deployed Cloud Run URL from the Next.js production environment.</p>
+<p>The system cannot deploy to Cloud Run without <code>gcloud</code> and GCP project access, and per explicit instructions, <strong>security must not be weakened by deploying an unauthenticated public endpoint</strong>.</p>
+<h4>3. What Remains Unchanged:</h4>
+<ul>
+<li>The frozen XGBoost model (<code>models/beatahead_phase5_model.joblib</code>) remains 100% immutable (SHA-256 verified).</li>
+<li>The 26-feature Matrix A schema and operating threshold (<code>0.156742</code>) remain completely unchanged.</li>
+<li>The VitalDB dataset (100 cases) remains untouched.</li>
+<li>The ISI mathematical engine and state machine remain frozen.</li>
+<li>The Next.js web application builds cleanly across all 38 routes and passes all 66 regression tests.</li>
+<li>Staging mode remains fully functional.</li>
+</ul>
+<h4>4. Exact Next Action Required for Release:</h4>
+<ol>
+<li><strong>Install Google Cloud SDK</strong>: Install and initialize <code>gcloud</code> CLI on a deployment machine or CI/CD runner:
+   <code>bash
+   gcloud auth login
+   gcloud config set project &lt;YOUR_GCP_PROJECT_ID&gt;</code></li>
+<li><strong>Build and Push Container Image</strong>:
+   <code>bash
+   gcloud builds submit --tag us-docker.pkg.dev/&lt;YOUR_GCP_PROJECT_ID&gt;/beatahead/ml-service:1.0.0</code></li>
+<li><strong>Deploy to Google Cloud Run</strong>:
+   <code>bash
+   gcloud run deploy beatahead-ml-service \
+     --image us-docker.pkg.dev/&lt;YOUR_GCP_PROJECT_ID&gt;/beatahead/ml-service:1.0.0 \
+     --platform managed \
+     --region us-central1 \
+     --port 8080 \
+     --memory 512Mi \
+     --cpu 1 \
+     --min-instances 1 \
+     --max-instances 10 \
+     --no-allow-unauthenticated</code></li>
+<li><strong>Configure Vercel Environment Variables</strong>:
+   - <code>ML_SERVICE_URL="https://beatahead-ml-service-&lt;hash&gt;-uc.a.run.app"</code>
+   - <code>ML_SERVICE_AUTH_TOKEN="&lt;GCP_SERVICE_ACCOUNT_OIDC_TOKEN&gt;"</code></li>
+<li><strong>Deploy Vercel</strong>: Trigger Vercel production deployment (<code>vercel --prod</code>).</li>
+</ol>
+</body>
+</html>

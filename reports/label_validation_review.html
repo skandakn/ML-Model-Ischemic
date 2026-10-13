@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>BeatAhead Implementation Document</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; line-height: 1.55; font-size: 10.5pt; margin: 0; }
+  h1 { font-size: 18pt; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 6px; page-break-after: avoid; }
+  h2 { font-size: 13pt; color: #1e3a8a; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-top: 22px; page-break-after: avoid; }
+  h3 { font-size: 11pt; color: #1d4ed8; margin-top: 16px; page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 8.5pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background-color: #0f2b48; color: #ffffff; }
+  tr:nth-child(even) { background-color: #f8fafc; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background-color: #f1f5f9; padding: 2px 4px; }
+  pre { background-color: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 6px; font-size: 8pt; line-height: 1.35; page-break-inside: avoid; }
+  blockquote { margin: 10px 0; padding: 8px 14px; background-color: #eff6ff; border-left: 4px solid #3b82f6; color: #1e40af; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>BeatAhead Cardiac Physiological ML Prototype: Label &amp; Data Validation Review</h1>
+<p><strong>Document:</strong> <code>reports/label_validation_review.md</code><br />
+<strong>Target:</strong> Sprint 1 Pilot Validation Review (20 VitalDB Cases)<br />
+<strong>Date:</strong> September 2026<br />
+<strong>Status:</strong> COMPLETED — AWAITING HUMAN REVIEW  </p>
+<hr />
+<h2>1. Executive Summary &amp; Review Findings</h2>
+<p>Following the acquisition and inspection of the 20-case VitalDB pilot cohort, a rigorous <strong>Label and Data Validation Review</strong> was conducted to audit:
+1. The mathematical and clinical validity of the <strong>Continuous Intraoperative ST-Deviation</strong> target.
+2. The exact physical representation of <code>Solar8000/ST_II</code> in VitalDB files.
+3. The root cause of the <strong>15 reported sustained positive windows</strong> (unique clinical episodes vs. window overlap).
+4. Patient-level data leakage risks in sliding window architectures.
+5. Pulse Arrival Time (PAT) plausibility and sensor failure modes.
+6. The feasibility of resolving the single-lead monitoring limitation by incorporating <strong>Lead V5 (<code>SNUADC/ECG_V5</code>)</strong>.</p>
+<h3>Summary of Critical Review Findings</h3>
+<pre><code>+----------------------------------------------------------------------------------------------------+
+|                                    VALIDATION AUDIT SUMMARY                                        |
++------------------------------------+---------------------------------------------------------------+
+| Audit Item                         | Finding &amp; Verification Status                                 |
++------------------------------------+---------------------------------------------------------------+
+| ST_II Units &amp; Quantization         | Millimeters (mm) at 10 mm/mV standard calibration (1mm = 0.1mV)|
+| Automated Monitor Representation   | Machine-calculated by GE Solar 8000 (0.5 Hz nominal rate)     |
+| Voltage Conversion Applied         | None in raw data; values evaluated directly in mm             |
+| Rule Implementation Check          | DISCREPANCY IDENTIFIED: Code used sum(ST &lt;= -1.0) &gt;= 60s       |
+|                                    | instead of true consecutive 60s run length.                   |
+| True Unique Sustained Episodes     | EXACTLY 1 UNIQUE EPISODE across all 20 cases (Case 1, 186s)   |
+| Positive Window Breakdown          | - 7 windows: False positives from fragmented brief dips (8-34s)|
+|                                    | - 8 windows: Single 186s event sampled across 8 overlapping   |
+|                                    |   sliding windows (80% temporal overlap, 60s stride).         |
+| Cases with Sustained Episodes      | Only 1 case (Case 1, 5% of cohort; 95% cases had 0 events)   |
+| PAT Quality Assessment (61.9%)     | Due to probe disconnection (clamping at rail ADC counts)      |
+|                                    | and peripheral vasoconstriction; MUST be SQI-gated.           |
+| ECG_V5 Availability &amp; Feasibility  | Available in 8/20 pilot cases (40%) and 3,390 full cases (53%)|
+|                                    | Technically feasible and clinically indispensable.            |
++------------------------------------+---------------------------------------------------------------+
+</code></pre>
+<hr />
+<h2>2. Representation of <code>Solar8000/ST_II</code> in VitalDB</h2>
+<p>An audit of the raw binary <code>.vital</code> files and track structures confirms:</p>
+<h3>2.1 Units and Scale</h3>
+<ul>
+<li><strong>Physical Units</strong>: <strong>Millimeters (mm)</strong>.</li>
+<li><strong>Calibration Standard</strong>: GE Solar 8000 monitors operate on the universal clinical ECG calibration standard:
+  $$10\text{ mm} = 1.0\text{ mV} \implies 1.0\text{ mm} = 0.1\text{ mV}$$</li>
+<li><strong>Quantization</strong>: Discrete steps of $0.1\text{ mm}$ (e.g., $-1.9, -1.8, \dots, -0.1, 0.0, +0.1\text{ mm}$).</li>
+<li><strong>Conversion to mV</strong>: <strong>No voltage conversion was performed in the raw dataset or our extraction scripts</strong>. The numbers $-1.0, -1.9$ are stored directly as millimeters, which correspond directly to $-0.10\text{ mV}$ and $-0.19\text{ mV}$.</li>
+</ul>
+<h3>2.2 Sampling Frequency and Temporal Structure</h3>
+<ul>
+<li><strong>Monitor Update Rate</strong>: The Solar 8000 monitor outputs numeric ST parameters nominally <strong>every 2.0 seconds (0.5 Hz)</strong>.</li>
+<li><strong>Extraction Behavior</strong>: When extracted on a 1.0 Hz timeline via <code>VitalFile.to_numpy(interval=1.0)</code>, raw data contains ~52% NaNs because values are only updated on alternating seconds.</li>
+<li><strong>Missing-Value Imputation</strong>: Forward-filling with a limit of 10 seconds (<code>ffill(limit=10)</code>) bridges the 2-second sampling interval without fabricating data, reducing missingness to <strong>4.8%</strong>, which corresponds strictly to clinical sensor connect/disconnect periods.</li>
+</ul>
+<h3>2.3 Nature of the ST_II Signal (Automated vs. Manual)</h3>
+<ul>
+<li><code>Solar8000/ST_II</code> is <strong>NOT</strong> a manual caliper annotation performed by an expert cardiologist.</li>
+<li>It is an <strong>automated, real-time machine-calculated metric</strong> generated by GE's internal Marquette EK-Pro / 12SL arrhythmia and ST analysis algorithm:</li>
+<li>Baseline Reference: Isoelectric level measured during the PR segment.</li>
+<li>ST Measurement Point: Voltage measured at the J-point $+ 60\text{ ms}$ (at high heart rates) or J-point $+ 80\text{ ms}$ (at normal/low heart rates).</li>
+<li>Averaging: Computed over a running median beat template (~8–16 beats).</li>
+</ul>
+<hr />
+<h2>3. Clinical Literature Justification for Event Rules</h2>
+<p>The clinical justification and limitations of the three thresholds are documented below:</p>
+<h3>3.1 The $\pm 1.0\text{ mm}$ ($\pm 0.1\text{ mV}$) ST-Segment Threshold</h3>
+<ul>
+<li><strong>Primary Source</strong>: <strong>ACC/AHA 2002 Guideline Update for Exercise Testing</strong> (Gibbons et al., <em>Circulation</em> 2002;106:1883–1892) &amp; <strong>ACC/AHA Guidelines for Ambulatory Electrocardiography</strong> (Crawford et al., <em>JACC</em> 1999;34:912–948).</li>
+<li><strong>Criteria</strong>: Horizontal or downsloping ST-segment depression $\ge 1.0\text{ mm}$ ($0.10\text{ mV}$) measured at $J+60\text{ ms}$ or $J+80\text{ ms}$ is the universal diagnostic criterion for exertional and ambulatory subendocardial myocardial ischemia.</li>
+<li><strong>Secondary Source</strong>: <strong>Fourth Universal Definition of Myocardial Infarction</strong> (Thygesen et al., <em>Circulation</em> 2018;138:e618–e651): New horizontal or downsloping ST depression $\ge 0.05\text{ mV}$ ($0.5\text{ mm}$) or ST elevation $\ge 0.1\text{ mV}$ ($1.0\text{ mm}$) in two contiguous leads.</li>
+</ul>
+<h3>3.2 The 60-Second Persistence Rule</h3>
+<ul>
+<li><strong>Primary Source</strong>: <strong>Classic Ambulatory Ischemia "1x1x1 Rule"</strong> (Stern &amp; Tzivoni, <em>Circulation</em> 1974; Cohn et al., <em>Ann Intern Med</em> 1983): An ischemic ST episode on Holter / continuous monitoring requires $\ge 1.0\text{ mm}$ ST deviation lasting for <strong>$\ge 1.0\text{ minute (60 seconds)}$</strong>, separated from other episodes by at least 1 minute of baseline recovery.</li>
+<li><strong>Rationale</strong>: Transitory voltage fluctuations $&lt; 60\text{ seconds}$ during surgery are frequently caused by surgical manipulation, electrocautery RF discharge, or acute ventilation changes rather than sustained ischemic tissue hypoperfusion.</li>
+</ul>
+<h3>3.3 The 30-Second Transient Rule</h3>
+<ul>
+<li><strong>Primary Source</strong>: <strong>Long-Term ST Database (LTST DB) Annotation Guidelines</strong> (Jager et al., <em>Med Biol Eng Comput</em> 2003;41:172–182). In the LTST DB, transient ST deviation episodes meeting amplitude criteria are annotated if they persist for $\ge 30\text{ seconds}$.</li>
+</ul>
+<blockquote>
+<p>[!WARNING]
+<strong>Clinical Non-Equivalence Notice</strong>:
+An automated monitor reading of $\text{ST_II} \le -1.0\text{ mm}$ is an <strong>electrophysiological surrogate</strong>, NOT a histological or angiographic confirmation of acute myocardial infarction. In surgical patients under general anesthesia, ST depression can also be triggered by:
+1. Tachycardia-induced rate-dependent ST depression.
+2. Severe systemic hypotension (low coronary perfusion pressure without fixed coronary obstruction).
+3. Hypothermia or electrolyte shifts (hypokalemia).
+4. Positional axis changes (surgical tilting / Trendelenburg).</p>
+</blockquote>
+<hr />
+<h2>4. Implementation Audit: Code vs. Documented Rule</h2>
+<p>An audit of lines 310–335 in <code>src/run_pilot_pipeline.py</code> revealed a <strong>critical discrepancy</strong>:</p>
+<h3>The Code Implementation</h3>
+<pre><code class="language-python">valid_st_win = w_st[~np.isnan(w_st)]
+if len(valid_st_win) &gt;= 120:
+    dep_count = (valid_st_win &lt;= -1.0).sum()
+    if dep_count &gt;= 60:
+        st_event_windows_sustained += 1
+</code></pre>
+<h3>The Discrepancy</h3>
+<ul>
+<li><strong>Documented Rule</strong>: ST deviation $\le -1.0\text{ mm}$ sustained for <strong>$\ge 60$ consecutive seconds</strong>.</li>
+<li><strong>Actual Code</strong>: Evaluated <code>(valid_st_win &lt;= -1.0).sum() &gt;= 60</code>, which counts the <strong>cumulative sum of non-consecutive seconds</strong> within the 300-second window.</li>
+</ul>
+<h3>Consequence on Pilot Results</h3>
+<ul>
+<li>In <strong>Case 1</strong>, between minutes 8.0 and 21.0 (windows 8 through 16), ST_II exhibited fragmented, brief dips lasting only <strong>8s, 10s, 16s, and 34s</strong> (interspersed with normal baseline readings of $-0.5\text{ mm}$).</li>
+<li>Because their cumulative sum exceeded 60 seconds (e.g. 66s, 84s, 104s), the code erroneously flagged <strong>7 windows as "sustained events"</strong>, even though the maximum consecutive run length in those windows was only <strong>34 seconds</strong>.</li>
+</ul>
+<hr />
+<h2>5. Visual Inspection of Representative Windows</h2>
+<p>Representative diagnostic plots were generated and saved to <code>reports/figures/</code>:</p>
+<h3>5.1 Genuine Sustained Ischemic Window (Case 1, Window 176: Minutes 176.0 to 181.0)</h3>
+<p><img alt="Genuine Sustained Positive Window" src="figures/st_positive_window_detail.png" /></p>
+<ul>
+<li><strong>Features</strong>:</li>
+<li>Between $t = 10,663\text{s}$ and $t = 10,848\text{s}$, <code>ST_II</code> experienced a profound, continuous depression reaching <strong>$-1.9\text{ mm}$ ($-0.19\text{ mV}$)</strong> lasting <strong>186 consecutive seconds (3.1 minutes)</strong>.</li>
+<li>Raw synchronized <code>SNUADC/ECG_II</code> at $t = 10,700\text{s}$ exhibits clear, horizontal ST-segment depression.</li>
+<li>Meets both the cumulative and consecutive clinical ischemic criteria.</li>
+</ul>
+<h3>5.2 Fragmented Dips (False Positive) vs. Genuine Sustained Ischemia</h3>
+<p><img alt="Fragmented vs Sustained" src="figures/st_fragmented_vs_sustained.png" /></p>
+<ul>
+<li><strong>Window 11 (Minutes 11–16)</strong>: Demonstrates multiple transient dips (max consecutive run = 34s). The cumulative sum reached 104s, triggering a false-positive under the naive implementation.</li>
+<li><strong>Window 176 (Minutes 176–181)</strong>: Demonstrates genuine sustained ischemia (consecutive run = 186s).</li>
+</ul>
+<h3>5.3 Normal Baseline Control Windows (Case 16 &amp; Case 22)</h3>
+<p><img alt="Negative Windows" src="figures/st_negative_window_detail.png" /></p>
+<ul>
+<li>Both cases demonstrate flat, stable ST-segment levels fluctuating between $0.0\text{ mm}$ and $+0.2\text{ mm}$, representing valid negative controls.</li>
+</ul>
+<hr />
+<h2>6. Episode Analysis: Unique Events vs. Window Redundancy</h2>
+<p>A temporal continuity analysis across all 20 pilot cases reveals the exact event structure:</p>
+<pre><code>+----------------------------------------------------------------------------------------------------+
+|                                    EPISODE AUDIT BREAKDOWN                                         |
++---------+--------------------+----------------+-------------------+--------------------------------+
+| Case ID | Episode Start (s)  | Duration (s)   | Min ST_II (mm)    | Clinical Classification        |
++---------+--------------------+----------------+-------------------+--------------------------------+
+| Case 1  | 614s to 1175s      | 8s to 34s dips | -1.0 to -1.2 mm   | Fragmented transient dips      |
+| Case 1  | 10663s (177.7m)    | 186 seconds    | -1.9 mm (-0.19mV) | UNIQUE SUSTAINED ISCHEMIA      |
+| Case 1  | 10875s (181.2m)    | 46 seconds     | -1.3 mm           | Resolving transient depression |
+| Case 1  | 10927s (182.1m)    | 47 seconds     | -1.7 mm           | Re-depression episode          |
+| Case 13 | 124s (2.1m)        | 30 seconds     | -2.2 mm           | Transient induction artifact   |
+| Case 38 | 318s (5.3m)        | 6 seconds      | -1.0 mm           | Transient motion artifact      |
+| Case 61 | ~600s              | 4 seconds      | -3.6 mm           | Isolated glitch artifact       |
++---------+--------------------+----------------+-------------------+--------------------------------+
+</code></pre>
+<h3>Critical Findings on Window Overlap</h3>
+<ol>
+<li><strong>Number of Unique Sustained Ischemic Episodes ($\ge 60\text{s}$)</strong>: <strong>EXACTLY 1 UNIQUE EPISODE</strong> across the entire 20-case pilot cohort.</li>
+<li><strong>Number of Positive Cases</strong>: <strong>ONLY 1 CASE (Case 1)</strong> exhibited sustained ischemia (Case 1 accounts for 100% of all sustained positive windows).</li>
+<li><strong>Temporal Window Redundancy</strong>:
+   * The 5-minute sliding window has a length of $300\text{s}$ and a stride of $60\text{s}$.
+   * Adjacent windows overlap by <strong>240 seconds (80% temporal overlap)</strong>.
+   * The single 186-second episode at minute 177 was sampled by <strong>8 consecutive sliding windows</strong> (windows 174 through 181).
+   * <strong>Conclusion</strong>: The 15 positive windows reported earlier do <strong>NOT</strong> represent 15 independent events; they represent a single clinical event sampled 8 times by overlapping windows, plus 7 false-positive windows caused by cumulative non-consecutive dips.</li>
+</ol>
+<hr />
+<h2>7. Patient-Level Data Leakage Risks &amp; Splitting Policy</h2>
+<p>The finding that all positive windows originate from a single patient highlights an extreme risk of machine learning data leakage:</p>
+<h3>The Danger of Random Window-Level Splitting</h3>
+<ul>
+<li>If 3,486 sliding windows are shuffled and split randomly into 70% Train and 30% Test:</li>
+<li>Windows 174, 176, 178 from Case 1 would enter the Training set.</li>
+<li>Windows 175, 177, 179 from Case 1 would enter the Test set.</li>
+<li>Because adjacent windows share <strong>80% identical raw ECG/PPG/SpO2 waveforms</strong>, the model would simply memorize Case 1's baseline physiology rather than learning generalizable ischemic patterns, resulting in near-100% artificial test accuracy.</li>
+</ul>
+<h3>Mandatory Subject-Level Splitting Protocol</h3>
+<ol>
+<li><strong>Strict GroupKFold / Case-Level Partition</strong>:
+   * All windows from a given <code>caseid</code> / <code>subjectid</code> must reside exclusively in either Train, Validation, or Test. Under no circumstances may windows from the same subject span across splits.</li>
+<li><strong>Stratified Group Splitting</strong>:
+   * Because genuine ischemic events occur in only a minority of patients, splitting must be stratified at the <em>patient level</em> so that cases with positive events are distributed across folds.</li>
+</ol>
+<hr />
+<h2>8. Pulse Arrival Time (PAT) Quality Review</h2>
+<p>In the pilot inspection, only <strong>61.9% of cardiac cycles</strong> yielded plausible PAT values ($100\text{ ms} \le \text{PAT} \le 450\text{ ms}$).</p>
+<h3>8.1 Diagnostic Failure Mode Analysis</h3>
+<p>Investigation of individual cases revealed the three root causes:</p>
+<ol>
+<li><strong>PPG Sensor Disconnection / Clamping at Rail Voltage (35% of failures)</strong>:
+   * In <strong>Case 21</strong>, the PPG signal was clamped at the positive ADC rail count of $+25,686.95$ for prolonged surgical periods (see <code>reports/figures/pat_quality_failure_modes.png</code>), indicating the pulse oximeter finger probe was detached or turned off.
+   * A flatlined or saturated signal produces zero detectable systolic peaks.</li>
+<li><strong>Peripheral Vasoconstriction &amp; Hypoperfusion (45% of failures)</strong>:
+   * During hypothermia or following vasopressor boluses (<code>intraop_phe</code> phenylephrine), digital pulse wave amplitude drops drastically, causing peak detectors to latch onto reflected dicrotic notches or noise rather than true systolic peaks.</li>
+<li><strong>Clean Baseline Physiology (Case 1)</strong>:
+   * In stable, well-perfused cases like Case 1, <strong>85.6% of beats</strong> had pristine, plausible PAT values (median PAT = 222.0 ms).</li>
+</ol>
+<h3>8.2 PAT Feature Recommendation</h3>
+<ul>
+<li><strong>Recommendation</strong>: <strong>Retain PAT as a feature, but STRICTLY WITH AN SQI / PERFUSION QUALITY FLAG</strong>.</li>
+<li><strong>Rules</strong>:
+  1. Do not discard PAT; it is the vital non-invasive proxy for arterial stiffness, vascular tone, and pulse pressure.
+  2. Implement an automated Signal Quality Index (SQI) check on every window:<ul>
+<li>If PPG variance $&lt; 0.05$ or signal is rail-clamped ($&gt;20,000$), set <code>PAT_valid = 0</code> and impute <code>PAT = NaN</code> (or median baseline).</li>
+<li>If valid beat pairing $&lt; 70\%$, flag window as <code>low_perfusion_quality = 1</code>.</li>
+</ul>
+</li>
+</ul>
+<hr />
+<h2>9. Single-Lead Limitation &amp; Feasibility of Adding <code>ECG_V5</code></h2>
+<h3>9.1 Clinical Necessity of Lead V5</h3>
+<ul>
+<li><strong>Lead II Limitation</strong>: Lead II is oriented along the cardiac electrical axis toward the inferior wall (perfused by the Right Coronary Artery). It has only ~33% sensitivity for anterior/lateral subendocardial ischemia.</li>
+<li><strong>Lead V5 Superiority</strong>: In classic intraoperative ischemia studies (London et al., <em>Anesthesiology</em> 1988), <strong>Lead V5 alone detected 75% of intraoperative ischemic episodes</strong>, and combining <strong>Lead II + Lead V5 detected &gt;85–90% of all ischemic events</strong>.</li>
+<li>Relying solely on Lead II risks missing patients with left anterior descending (LAD) or circumflex coronary artery hypoperfusion.</li>
+</ul>
+<h3>9.2 Feasibility in VitalDB</h3>
+<ul>
+<li>In our 20 pilot cases: <strong>8 cases (40.0%)</strong> contain <code>SNUADC/ECG_V5</code>.</li>
+<li>Across the full VitalDB cohort of 6,388 cases: <strong>3,390 cases (53.1%)</strong> contain <code>SNUADC/ECG_V5</code>, and <strong>3,024 cases</strong> contain continuous automated <code>Solar8000/ST_V5</code> deviation values.</li>
+<li><strong>Conclusion</strong>: Adding <code>SNUADC/ECG_V5</code> and <code>Solar8000/ST_V5</code> in the next dataset expansion is <strong>100% technically feasible</strong> and <strong>clinically essential</strong>.</li>
+</ul>
+<hr />
+<h2>10. Summary Conclusions &amp; Recommended Expansion Strategy</h2>
+<ol>
+<li><strong>Current Label Implementation Status</strong>:
+   * <strong>Partially Defective</strong>: The current implementation counted cumulative non-consecutive seconds rather than true continuous run length ($\ge 60\text{s}$). This must be refactored before scaling.</li>
+<li><strong>True Event Prevalence in Pilot</strong>:
+   * There is <strong>exactly 1 unique sustained ischemic episode</strong> across all 20 pilot cases (Case 1, 186s duration, reaching $-1.9\text{ mm}$ ST depression).
+   * Unstratified random downloading yields severe class imbalance (~0.4% true event windows).</li>
+<li><strong>Recommended Next Step for Dataset Expansion</strong>:
+   * <strong>Do NOT download cases at random</strong>.
+   * Select an expanded cohort ($N = 100\text{ cases}$) filtered by:<ol>
+<li>Presence of <code>SNUADC/ECG_II</code>, <code>SNUADC/ECG_V5</code>, <code>SNUADC/PLETH</code>, <code>Solar8000/PLETH_SPO2</code>, and <code>Solar8000/ST_II</code>.</li>
+<li><strong>Enrichment for Cardiovascular Risk</strong>: Select cases with preoperative coronary artery disease, hypertension, or diabetes (<code>dx</code> containing CAD/CABG, <code>preop_htn = 1</code>, <code>preop_dm = 1</code>), and cases with documented ST deviation episodes ($\min(\text{ST_II}) \le -1.0\text{ mm}$ or $\min(\text{ST_V5}) \le -1.0\text{ mm}$).
+   * Refactor the label generator to strictly enforce the <strong>contiguous 60-second persistence rule</strong>.</li>
+</ol>
+</li>
+</ol>
+<hr />
+<blockquote>
+<p>[!NOTE]
+<strong>Execution Halted</strong>: In strict accordance with the sprint directives, all processing is stopped. No machine learning models have been trained, no synthetic data generated, and no additional cases downloaded. Awaiting human review.</p>
+</blockquote>
+</body>
+</html>

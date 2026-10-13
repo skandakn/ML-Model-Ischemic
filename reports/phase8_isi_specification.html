@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>BeatAhead Implementation Document</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; line-height: 1.55; font-size: 10.5pt; margin: 0; }
+  h1 { font-size: 18pt; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 6px; page-break-after: avoid; }
+  h2 { font-size: 13pt; color: #1e3a8a; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-top: 22px; page-break-after: avoid; }
+  h3 { font-size: 11pt; color: #1d4ed8; margin-top: 16px; page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 8.5pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background-color: #0f2b48; color: #ffffff; }
+  tr:nth-child(even) { background-color: #f8fafc; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background-color: #f1f5f9; padding: 2px 4px; }
+  pre { background-color: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 6px; font-size: 8pt; line-height: 1.35; page-break-inside: avoid; }
+  blockquote { margin: 10px 0; padding: 8px 14px; background-color: #eff6ff; border-left: 4px solid #3b82f6; color: #1e40af; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>Phase 8 — BeatAhead Ischemic Stress Index (ISI) Specification &amp; Audit Report</h1>
+<p><strong>Document ID:</strong> BEATAHEAD-PHASE8-ISI-SPECIFICATION<br />
+<strong>Execution Timestamp:</strong> 2026-09-22 19:48:00 UTC<br />
+<strong>Environment:</strong> BeatAhead Specification &amp; Architectural Audit<br />
+<strong>Phase Status:</strong> SPECIFICATION ONLY (Strictly Non-Executable &amp; Non-Modifying)<br />
+<strong>Upstream Frozen Artifacts:</strong>
+- Frozen Model: <code>models/beatahead_phase5_model.joblib</code> (SHA256 verified)
+- Frozen Schema: <code>models/feature_schema.json</code> (Schema v1.0.0, 26 Matrix A features)
+- Frozen Model Metadata: <code>models/model_metadata.json</code>
+- Frozen Calibrated Threshold: $\tau = 0.156742$
+- Frozen Dataset: <code>data/processed/vitaldb_100_windows.pkl.gz</code> (100-case VitalDB surgical benchmark)</p>
+<hr />
+<h2>1. Executive Summary &amp; Regulatory Boundary</h2>
+<p>Phase 8 defines the formal engineering, mathematical, and conceptual specification governing how BeatAhead's user-facing <strong>0–100 Ischemic Stress Index (ISI)</strong> relates to the upstream <strong>Frozen Phase 5/6 Machine Learning Inference Engine</strong>.</p>
+<h3>1.1 Invariants Upheld in Phase 8</h3>
+<p>In strict compliance with project constraints:
+1. <strong>Zero Retraining or Alteration</strong>: The frozen XGBoost model artifact, hyperparameters, 26 Matrix A features, and calibrated decision threshold ($0.156742$) were untouched.
+2. <strong>Zero Code Modification</strong>: No application code, UI components, API routes, or simulation routines (<code>calculateISI()</code>) were altered.
+3. <strong>Formal Decoupling ($p_{\text{model}} \neq \text{ISI}$)</strong>: The specification explicitly establishes that the XGBoost conditional model probability ($p_{\text{model}}$) is <strong>not</strong> the ISI product score. Direct linear scaling ($\text{ISI} = p_{\text{model}} \times 100$) is formally rejected because it collapses 99% of normal physiology into the $0.0–1.5$ range and distorts user perception.
+4. <strong>Strict Non-Diagnostic Positioning</strong>: The ISI is formally defined as an exploratory, illustrative product-level index for trend tracking and research demonstration. It does not constitute a clinically validated risk score, does not predict myocardial infarction, and carries strict prohibitions against diagnostic terminology.</p>
+<hr />
+<h2>2. Audit of Existing BeatAhead ISI Implementation</h2>
+<p>An exhaustive audit of the existing codebase (<code>C:\ischemic\src\lib\isi\</code> and related UI components) was conducted to baseline current behavior.</p>
+<h3>2.1 Current <code>calculateISI()</code> Routine (<code>src/lib/isi/scoring.ts</code>)</h3>
+<pre><code class="language-typescript">export function calculateISI(input: ScoringInput): ISIScore {
+  const { features, baseline, historicalScores, scenario, signalQuality, timestamp } = input;
+
+  const hrvFactor = normalizeDeviation(features.hrv.deviation, -15, 15);
+  const pulseFactor = normalizeDeviation(features.pulseMorphology.deviation, -10, 20);
+  const spo2Factor = normalizeDeviation(features.spo2Trend.deviation, -3, 3);
+  const ecgFactor = normalizeDeviation(features.ecg.deviation, -10, 25);
+  const motionFactor = features.imu.artifactDetected ? 0.8 : Math.min(features.imu.motionIntensity, 0.5);
+
+  const contributions: ISIContributions = {
+    hrv: hrvFactor * 0.28,
+    pulseMorphology: pulseFactor * 0.22,
+    spo2Trend: spo2Factor * 0.18,
+    ecg: ecgFactor * 0.2,
+    motionArtifact: motionFactor * 0.12,
+  };
+
+  const rawScore =
+    baseline.isi +
+    contributions.hrv * 35 +
+    contributions.pulseMorphology * 30 +
+    contributions.spo2Trend * 25 +
+    contributions.ecg * 35 +
+    contributions.motionArtifact * 20;
+
+  const scenarioModifier = getScenarioModifier(scenario, historicalScores.length);
+  const adjustedScore = rawScore * scenarioModifier;
+  const score = Math.round(Math.max(0, Math.min(100, adjustedScore)));
+  ...
+}
+</code></pre>
+<h3>2.2 Audit Findings &amp; Observations</h3>
+<ol>
+<li><strong>Inputs</strong>:
+   - <code>features</code>: Mocked <code>FeatureSet</code> containing HRV SDNN, PPG pulse morphology, SpO2 trend, ECG heart rate, and IMU motion intensity.
+   - <code>baseline</code>: <code>PersonalBaseline</code> with default values: resting HR: 68 bpm, HRV: 51 ms, SpO2: 97%, pulse morphology: 0.85, baseline ISI: 48.
+   - <code>historicalScores</code>: Array of recent numeric scores.
+   - <code>scenario</code>: Simulated test state (<code>"normal" | "stress_event" | "recovering" | "persistent_rising" | "motion_artifact"</code>).
+   - <code>signalQuality</code>: Single scalar percentage ($0–100$).</li>
+<li><strong>Normalization &amp; Weighting</strong>:
+   - Feature deviations are clamped and linearly normalized to $[0, 1]$ via <code>normalizeDeviation(val, min, max)</code>.
+   - Weights: HRV (28%), Pulse Morphology (22%), SpO2 Trend (18%), ECG (20%), Motion Artifact (12%). Total $= 100\%$.
+   - Scale multiplier: Weighted contributions are scaled by factors between 20 and 35 and added to <code>baseline.isi</code> ($48$).</li>
+<li><strong>Simulation Modifiers</strong>:
+   - Scores are modulated by synthetic sinusoidal multipliers (<code>getScenarioModifier</code>) based on tick count.</li>
+<li><strong>Current Thresholds &amp; Labels (<code>src/lib/utils.ts</code>)</strong>:
+   - <code>0 - 30</code>: <code>"Lower observed trend"</code> (Green <code>#10B981</code>)
+   - <code>31 - 60</code>: <code>"Intermediate observed trend"</code> (Amber <code>#F59E0B</code>)
+   - <code>61 - 100</code>: <code>"Higher observed trend"</code> (Red <code>#DC2626</code>)
+   - Risk Trend Banner: Triggers when $\text{score} &gt; \text{baseline.isi} + 10$ ($&gt; 58$ points).</li>
+<li><strong>Existing UI References</strong>:
+   - <strong><code>ISIGauge.tsx</code></strong>: Radial circular gauge displaying 0–100 integer score, personal baseline (48), current deviation, trend arrow, confidence percentage, and disclaimer tooltip.
+   - <strong><code>RiskTrendBanner.tsx</code></strong>: Context banner displaying whether physiology is within or above recent personal baseline.
+   - <strong><code>ContributionBars.tsx</code></strong>: Horizontal progress bars showing relative influence of HRV, SpO2, pulse morphology, and motion.
+   - <strong><code>Live Monitor</code> (<code>/monitor</code>)</strong>: Integrates real-time gauge with rolling line chart.
+   - <strong><code>Trends</code> (<code>/trends</code>)</strong>: 24h, 7-day, and 30-day historical time-series graphs.</li>
+<li><strong>Codebase Disconnect</strong>:
+   - The comment in <code>scoring.ts</code> states: <em>"Replace this function with a real XGBoost model inference call in production."</em>
+   - This audit confirms that simply swapping <code>calculateISI()</code> with raw model probability would break the UI: an intraoperative ischemia probability of $0.005$ (normal surgical state) would display an ISI of $0$ or $1$, rendering the 48-baseline gauge completely unresponsive.</li>
+</ol>
+<hr />
+<h2>3. Five Conceptual Layer Definitions</h2>
+<p>To establish modularity and clinical clarity, BeatAhead defines five strictly separated layers:</p>
+<h3>Layer A: Frozen Model Output</h3>
+<ul>
+<li><strong>Nature</strong>: Statistical binary classifier (XGBoost) trained on 100 surgical cases.</li>
+<li><strong>Inputs</strong>: 26 Matrix A multimodal features computed over $T_{\text{obs}} = 300\text{ s}$.</li>
+<li><strong>Outputs</strong>:</li>
+<li>$p_{\text{model}} \in [0, 1]$: Statistical likelihood of prospective intraoperative ST depression event ($\ge 60$s at $\text{ST} \le -1.0\text{ mm}$ after a 300s buffer).</li>
+<li>$\tau_{\text{frozen}} = 0.156742$: Frozen calibrated decision threshold.</li>
+<li>$\text{ALERT} \in {0, 1}$: Binary state ($\text{ALERT} = 1 \iff p_{\text{model}} \ge 0.156742$).</li>
+</ul>
+<h3>Layer B: Signal Quality Assessment (SQA)</h3>
+<ul>
+<li><strong>Nature</strong>: Multi-sensor reliability and integrity gating engine.</li>
+<li><strong>Components</strong>:</li>
+<li>$Q_{\text{ecg}} \in [0, 1]$: Clean QRS detection fraction.</li>
+<li>$Q_{\text{ppg}} \in [0, 1]$: Waveform clipping and perfusion signal quality index.</li>
+<li>$V_{\text{pat}} \in {0, 1}$: Biologically plausible pulse arrival transit flag (100–450 ms in $\ge 30\%$ beats).</li>
+<li>$I_{\text{motion}} \in [0, 1]$: Inertial accelerometer disturbance magnitude.</li>
+<li><strong>Role</strong>: Quality gating prevents noisy sensor data from masquerading as physiological deterioration.</li>
+</ul>
+<h3>Layer C: Personal Baseline Tracking</h3>
+<ul>
+<li><strong>Nature</strong>: Patient-specific resting coordinate system.</li>
+<li><strong>Parameters</strong>: Baseline heart rate ($HR_{\text{base}}$), variability ($SDNN_{\text{base}}$), transit ($PAT_{\text{base}}$), oxygenation ($SpO2_{\text{base}}$), and ST level ($ST_{\text{base}}$).</li>
+<li><strong>Role</strong>: Quantifies relative physiological disturbance ($\Delta$). Disclaimed as non-predictive.</li>
+</ul>
+<h3>Layer D: Temporal Trend &amp; Momentum</h3>
+<ul>
+<li><strong>Nature</strong>: Rate of change and trajectory velocity tracker.</li>
+<li><strong>Metrics</strong>: 5-minute regression slope ($v$), 30-minute cumulative trajectory, and discrete trend direction (<code>increasing</code>, <code>decreasing</code>, <code>stable</code>).</li>
+<li><strong>Role</strong>: Differentiates acute transient fluctuations from sustained physiological drift.</li>
+</ul>
+<h3>Layer E: ISI Product Score</h3>
+<ul>
+<li><strong>Nature</strong>: 0–100 composite product index.</li>
+<li><strong>Synthesis</strong>: Combines Model Evidence ($E_{\text{model}}$), Autonomic Deviation ($D_{\text{auto}}$), Perfusion Strain ($D_{\text{perf}}$), and Trend Momentum ($M_{\text{trend}}$) anchored to personal resting baseline.</li>
+<li><strong>Role</strong>: Provides a responsive, easily interpreted wellness and stress indicator for user interface surfaces.</li>
+</ul>
+<hr />
+<h2>4. Formal ISI Input Specification</h2>
+<p>| Input | Source | Units | Normalization | Direction | Missing Data Behavior | Quality Dependency |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| <strong>$p_{\text{model}}$</strong> | XGBoost Matrix A | Probability $[0, 1]$ | Piecewise Sigmoidal | Higher $\rightarrow$ Higher ISI | Hold last valid up to 120s; fallback to heuristic | Gated if $Q_{\text{ecg}} &lt; 0.50$ |
+| <strong>$\text{ALERT}$</strong> | Threshold Comparator | Binary ${0, 1}$ | ${0, 1}$ at $\tau=0.156742$ | $1 \rightarrow$ Elevates ISI Floor | Return 0 if model offline | Inherits $p_{\text{model}}$ dependency |
+| <strong>$\Delta HR_{\text{base}}$</strong> | ECG Lead II | bpm | $\frac{HR - HR_{\text{base}}}{HR_{\text{base}}} \times 100$ | Higher $\rightarrow$ Higher ISI | Assume $\Delta = 0$ | Clamped if $Q_{\text{ecg}} &lt; 0.60$ |
+| <strong>$\Delta SDNN_{\text{base}}$</strong> | ECG Lead II | ms | $\frac{SDNN - SDNN_{\text{base}}}{SDNN_{\text{base}}} \times 100$ | Lower $\rightarrow$ Higher ISI | Assume $\Delta = 0$ | Suppressed if ectopic $&gt; 15\%$ |
+| <strong>$\Delta PAT_{\text{base}}$</strong> | ECG + PPG Synchrony | ms | $\frac{PAT - PAT_{\text{base}}}{PAT_{\text{base}}} \times 100$ | Shorter $\rightarrow$ Higher ISI | Exclude from factor pool | Omitted if $V_{\text{pat}} == 0$ |
+| <strong>$\Delta SpO2_{\text{base}}$</strong> | Pulse Oximeter | % | $\min(0, SpO2 - SpO2_{\text{base}})$ | Lower $\rightarrow$ Higher ISI | Assume $\Delta = 0$ | Clamped if $Q_{\text{ppg}} &lt; 0.60$ |
+| <strong>$\Delta ST_{\text{obs}}$</strong> | ECG Lead II | mm | $ST_{\text{median}} - ST_{\text{base}}$ | Depressed $\rightarrow$ Higher ISI | Fallback to non-ST heuristic | Gated if Lead II detached |
+| <strong>$Q_{\text{ecg}}$</strong> | QRS Detector | Ratio $[0, 1]$ | Linear $[0, 1]$ | Higher $\rightarrow$ Higher Confidence | Defaults to 0.0 (Unusable) | Direct quality sensor |
+| <strong>$Q_{\text{ppg}}$</strong> | PPG Pulse Analyzer | Ratio $[0, 1]$ | Linear $[0, 1]$ | Higher $\rightarrow$ Higher Confidence | Defaults to 0.0 (Unusable) | Direct quality sensor |
+| <strong>$V_{\text{pat}}$</strong> | Pulse Transit Engine | Binary ${0, 1}$ | ${0, 1}$ | $1 \rightarrow$ Valid transit | Defaults to 0 (Invalid) | Synchrony dependency |
+| <strong>$I_{\text{motion}}$</strong> | Accelerometer | a.u. / g | Clamped $[0, 1]$ | Higher $\rightarrow$ Lower Confidence | Defaults to 0.0 | Inertial sensor |
+| <strong>$T_{\text{velocity}}$</strong> | Moving Regression | points/min | Bounded $[-5, +5]$ | Positive $\rightarrow$ Rising Trend | 0.0 during initial 5 min | Requires $\ge 5$ clean ticks |</p>
+<hr />
+<h2>5. Personal Baseline Architecture</h2>
+<ol>
+<li><strong>Initialization</strong>:
+   - Minimum <strong>600 seconds (10 minutes)</strong> of continuous monitoring.
+   - Minimum data validity: $\ge 80\%$ of windows with $Q_{\text{overall}} \ge 0.70$.
+   - System state during acquisition: <code>Baseline Establishing</code> (displays acquisition percentage; no premature scores).</li>
+<li><strong>Adaptive Rolling Update (EMA)</strong>:
+   $$B_t = (1 - \alpha) B_{t-1} + \alpha X_t \quad (\alpha = 0.02)$$</li>
+<li><strong>Anti-Drift Gating Rule (Safety Critical)</strong>:
+   $$\text{Update Allowed} \iff (\text{State} == \text{"Normal / Stable"}) \land (Q_{\text{overall}} \ge 0.75) \land (I_{\text{motion}} &lt; 0.30)$$
+   <strong>Baseline updates are strictly locked during <code>Elevated Model Evidence</code> or <code>Elevated ISI Trend</code>.</strong> This prevents chronic physiological stress or acute ischemia from shifting the baseline upward and masking pathology.</li>
+<li><strong>Outlier Rejection</strong>: Values outside $\pm 3.0 \times \text{IQR}$ are rejected as transient motion or sensor detachment.</li>
+</ol>
+<hr />
+<h2>6. Mathematical Prototype Specification</h2>
+<h3>6.1 Model Evidence Mapping ($E_{\text{model}}$)</h3>
+<p>To bridge the frozen decision threshold ($\tau = 0.156742$) to the 0–100 scale:</p>
+<p>$$E_{\text{model}}(p) = \begin{cases} 
+0.50 \times \left( \frac{p}{\tau} \right)^{1.4} &amp; p &lt; \tau \
+0.50 + 0.50 \times \left( 1 - \exp\left( -4.0 \frac{p - \tau}{1 - \tau} \right) \right) &amp; p \ge \tau
+\end{cases}$$</p>
+<ul>
+<li>$p = 0.005$ (normal surgical baseline) $\rightarrow E_{\text{model}} \approx 0.008$</li>
+<li>$p = \tau = 0.156742$ (exact decision threshold) $\rightarrow E_{\text{model}} = 0.500$</li>
+<li>$p = 0.300 \rightarrow E_{\text{model}} \approx 0.77$</li>
+<li>$p = 0.600 \rightarrow E_{\text{model}} \approx 0.96$</li>
+</ul>
+<h3>6.2 Autonomic Shift Factor ($D_{\text{auto}}$)</h3>
+<p>$$f_{\text{hr}} = \text{clamp}\left( \frac{HR - HR_{\text{base}}}{25.0}, 0.0, 1.0 \right)$$
+$$f_{\text{hrv}} = \text{clamp}\left( \frac{SDNN_{\text{base}} - SDNN}{0.60 \times SDNN_{\text{base}}}, 0.0, 1.0 \right)$$
+$$D_{\text{auto}} = 0.50 \cdot f_{\text{hr}} + 0.50 \cdot f_{\text{hrv}}$$</p>
+<h3>6.3 Oxygenation &amp; Perfusion Factor ($D_{\text{perf}}$)</h3>
+<p>$$f_{\text{spo2}} = \text{clamp}\left( \frac{SpO2_{\text{base}} - SpO2}{5.0}, 0.0, 1.0 \right)$$
+$$f_{\text{pat}} = \text{clamp}\left( \frac{PAT_{\text{base}} - PAT}{50.0}, 0.0, 1.0 \right) \quad (\text{if } V_{\text{pat}} = 1, \text{ else omitted})$$
+$$D_{\text{perf}} = 0.60 \cdot f_{\text{spo2}} + 0.40 \cdot f_{\text{pat}} \quad (\text{or } D_{\text{perf}} = f_{\text{spo2}} \text{ if PAT invalid})$$</p>
+<h3>6.4 Trend Momentum ($M_{\text{trend}}$)</h3>
+<p>$$M_{\text{trend}} = \text{clamp}\left( \frac{v}{2.0}, -0.15, +0.15 \right) \quad (v = \text{points / minute over 5 min})$$</p>
+<h3>6.5 Composite Synthesis &amp; Guaranteed Bounding</h3>
+<p>$$\text{ISI}<em>{\text{raw}} = 40.0 + \left[ 0.45(E</em>{\text{model}} - 0.20) + 0.30 D_{\text{auto}} + 0.25 D_{\text{perf}} + M_{\text{trend}} \right] \times 60.0$$
+$$\text{ISI} = \text{round}\left( \max\left( 0.0, \min\left( 100.0, \text{ISI}_{\text{raw}} \right) \right) \right)$$</p>
+<p>$$\forall \text{ valid physiological vectors}, \quad 0 \le \text{ISI} \le 100$$</p>
+<hr />
+<h2>7. Model Alert State vs. ISI Display Score</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Attribute</th>
+<th style="text-align: left;">Model Alert State ($\text{ALERT}$)</th>
+<th style="text-align: left;">ISI Display Score ($\text{ISI}$)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Output Type</strong></td>
+<td style="text-align: left;">Discrete Binary Flag (${0, 1}$)</td>
+<td style="text-align: left;">Bounded Continuous Index ($[0, 100]$)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Threshold</strong></td>
+<td style="text-align: left;">Frozen Calibrated Value: <strong>$0.156742$</strong></td>
+<td style="text-align: left;">Low ($\le 30$), Mid ($31–60$), High ($\ge 61$)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Meaning</strong></td>
+<td style="text-align: left;">Machine learning forecast of prospective intraoperative ST depression event $\ge 60$s</td>
+<td style="text-align: left;">Multi-factor physiological strain index relative to baseline</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>UI Placement</strong></td>
+<td style="text-align: left;">Research Model Signal Card (<code>/insights</code>)</td>
+<td style="text-align: left;">Circular Gauge (<code>/monitor</code>, <code>/dashboard</code>)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>8. Signal Quality &amp; Degraded Sensor Behavior</h2>
+<p>$$Q_{\text{overall}} = Q_{\text{ecg}} \times 0.40 + Q_{\text{ppg}} \times 0.35 + V_{\text{pat}} \times 0.15 + (1 - I_{\text{motion}}) \times 0.10$$</p>
+<ol>
+<li><strong>$Q_{\text{ecg}} &lt; 0.50$</strong>: Suppress model inference; freeze ST &amp; HRV terms; display <code>"Signal Degraded"</code>.</li>
+<li><strong>$Q_{\text{ppg}} &lt; 0.50$</strong>: Suppress PPG morphology and PAT terms; calculate score solely from ECG and SpO2.</li>
+<li><strong>$V_{\text{pat}} == 0$</strong>: Exclude PAT from perfusion term gracefully without raising errors.</li>
+<li><strong>Missing SpO2</strong>: Retain nominal $SpO2_{\text{base}}$, reduce overall confidence by 20%.</li>
+<li><strong>$I_{\text{motion}} &gt; 0.70$</strong>: Lock score buffer; display <code>"Motion Artifact Detected"</code>.</li>
+<li><strong>$Q_{\text{overall}} &lt; 0.35$</strong>: System enters <code>Insufficient Signal Quality</code>; gauge displays <code>--</code>.</li>
+</ol>
+<hr />
+<h2>9. Five Product Output States</h2>
+<ol>
+<li><strong><code>Insufficient Signal Quality</code></strong>: $Q_{\text{overall}} &lt; 0.35$. Gauge shows <code>--</code>.</li>
+<li><strong><code>Baseline Establishing</code></strong>: Monitoring time $&lt; 600\text{ s}$. Progress percentage shown.</li>
+<li><strong><code>Normal / Stable</code></strong>: $Q_{\text{overall}} \ge 0.50$, $p_{\text{model}} &lt; 0.156742$, $\text{ISI} \le 60$. Green or amber gauge. Label: <code>"Lower/Intermediate observed trend"</code>.</li>
+<li><strong><code>Elevated Model Evidence</code></strong>: $p_{\text{model}} \ge 0.156742$. Explicit alert callout: <code>"Early-warning model evidence elevated"</code>.</li>
+<li><strong><code>Elevated ISI Trend</code></strong>: $\text{ISI} \ge 61$ due to cumulative autonomic/perfusion drift even if model is sub-threshold. Red gauge.</li>
+</ol>
+<blockquote>
+<p>[!CAUTION]
+<strong>Prohibited Diagnostic Terminology:</strong><br />
+The system must NEVER state: <em>"Heart attack detected"</em>, <em>"Ischemia confirmed"</em>, <em>"Myocardial infarction occurring"</em>, or <em>"Coronary artery occluded"</em>. All language must remain strictly observational and trend-oriented.</p>
+</blockquote>
+<hr />
+<h2>10. AI Insights Explainability Boundaries</h2>
+<ul>
+<li><strong>Permitted</strong>:</li>
+<li>Explaining whether the machine learning model detected physiological patterns matching surgical benchmark early-warning signatures.</li>
+<li>Reporting percentage deviations from the individual's resting baseline.</li>
+<li>Presenting relative feature contribution breakdowns (HRV, PAT, SpO2, ST).</li>
+<li>Highlighting sensor quality or motion artifacts reducing confidence.</li>
+<li><strong>Strictly Forbidden</strong>:</li>
+<li>Formulating clinical diagnoses or ruling out pathology.</li>
+<li>Recommending medication adjustments or cessation.</li>
+<li>Reassuring users to ignore acute chest pain, shortness of breath, or radiating arm pain.</li>
+</ul>
+<hr />
+<h2>11. Delivery Verification Checklist</h2>
+<ul>
+<li>[x] Full audit of existing BeatAhead ISI codebase completed and documented.</li>
+<li>[x] Conceptual separation of 5 layers established.</li>
+<li>[x] Formal ISI input specification table generated (12 tracked inputs).</li>
+<li>[x] Personal baseline architecture specified (initialization, anti-drift gating, outlier rejection).</li>
+<li>[x] Mathematical prototype specification established with guaranteed $[0, 100]$ bounds.</li>
+<li>[x] Model decision threshold ($0.156742$) strictly preserved.</li>
+<li>[x] Signal quality degradation rules defined.</li>
+<li>[x] 5-state product automaton defined with non-diagnostic terminology rules.</li>
+<li>[x] AI Insights explainability boundaries defined.</li>
+<li>[x] Deliverables created: <code>docs/ISI_SPECIFICATION.md</code>, <code>docs/ISI_DATA_FLOW.md</code>, <code>reports/phase8_isi_specification.md</code>.</li>
+<li>[x] Zero code, UI, API, model artifact, or dataset modifications made.</li>
+</ul>
+</body>
+</html>

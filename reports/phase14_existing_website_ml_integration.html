@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>BeatAhead Implementation Document</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; line-height: 1.55; font-size: 10.5pt; margin: 0; }
+  h1 { font-size: 18pt; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 6px; page-break-after: avoid; }
+  h2 { font-size: 13pt; color: #1e3a8a; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-top: 22px; page-break-after: avoid; }
+  h3 { font-size: 11pt; color: #1d4ed8; margin-top: 16px; page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 8.5pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background-color: #0f2b48; color: #ffffff; }
+  tr:nth-child(even) { background-color: #f8fafc; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background-color: #f1f5f9; padding: 2px 4px; }
+  pre { background-color: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 6px; font-size: 8pt; line-height: 1.35; page-break-inside: avoid; }
+  blockquote { margin: 10px 0; padding: 8px 14px; background-color: #eff6ff; border-left: 4px solid #3b82f6; color: #1e40af; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>BeatAhead Phase 14: Existing Website Machine Learning Integration Report</h1>
+<p><strong>Execution Date:</strong> 2026-09-23<br />
+<strong>Target Repository:</strong> <code>C:\ischemic</code> (Branch: <code>staging-ml-integration</code>)<br />
+<strong>ML Project Repository:</strong> <code>c:\ML Model - Ischemic</code><br />
+<strong>Live Production Target:</strong> <code>https://prevention-of-heart-attack-txdb.vercel.app/</code><br />
+<strong>GitHub Repository:</strong> <code>https://github.com/skandakn/prevention-of-heart-attack-github</code><br />
+<strong>Final Status:</strong> <strong><code>INTEGRATION VERIFIED</code></strong></p>
+<hr />
+<h2>1. Executive Summary</h2>
+<p>Phase 14 successfully integrated the validated, frozen BeatAhead Phase 5 XGBoost machine learning model and 26-feature Matrix A schema into the <strong>EXISTING BeatAhead website</strong>. </p>
+<p>The integration strictly followed all architectural, scientific, and UI constraints:
+- <strong>Zero Website Rebuilding</strong>: The existing Next.js App Router application was preserved in full. No second dashboard, alternative UI layout, or navigation redesign was created.
+- <strong>Zero Model Alteration</strong>: The frozen XGBoost model artifact (<code>models/beatahead_phase5_model.joblib</code>), 26-feature schema (<code>models/feature_schema.json</code>), and operating decision threshold (<code>0.156742</code>) remain 100% bit-for-bit identical to the Phase 5/6 freeze.
+- <strong>Preserved Simulated Data Mode</strong>: Simulated physiological waveforms (ECG, PPG, SpO2, IMU) remain active for interactive demonstration. The UI prominently displays <code>RESEARCH MODEL — SIMULATED INPUT</code> across all pages.
+- <strong>Strict Decoupling of ML Probability and Product Score</strong>: The XGBoost probability ($p_{\text{model}} \in [0, 1]$) is strictly fed into the audited Phase 8/9 composite Ischemic Stress Index (ISI) engine ($0 \le \text{ISI} \le 100$) rather than improperly equating $\text{ISI} = p \times 100$.
+- <strong>Complete Test &amp; Build Verification</strong>: 72/72 automated regression tests passed (including the new Phase 14 critical pipeline test suite), TypeScript static verification passed with 0 errors, and the Next.js production build succeeded across all 38 application routes.</p>
+<hr />
+<h2>2. Existing Website Architecture</h2>
+<ul>
+<li><strong>Framework</strong>: Next.js 15.1.0 with React 19 and TailwindCSS.</li>
+<li><strong>Routing Paradigm</strong>: App Router with 38 static and dynamic routes.</li>
+<li><strong>Core User Pages</strong>:</li>
+<li><code>/dashboard</code>: Main live physiological monitoring dashboard with gauge, trends, banners, and statistics.</li>
+<li><code>/monitor</code>: Live waveform viewer (PPG, ECG, SpO2, IMU) with signal processing pipeline.</li>
+<li><code>/signals</code>: Physiological feature analysis table and baseline comparison.</li>
+<li><code>/trends</code>: Long-term historical trend charts with time-window filtering.</li>
+<li><code>/insights</code>: AI Insights explainability card and physiological component summaries.</li>
+<li><code>/clinician</code>: Clinical decision support prototype with patient cards and JSON report export.</li>
+<li><strong>Authentication</strong>: Clerk middleware (<code>src/middleware.ts</code>).</li>
+<li><strong>Subscription / Billing</strong>: Razorpay integration (<code>src/lib/subscription/</code>).</li>
+<li><strong>Specialized AI Agents</strong>: Exotel and ElevenLabs voice calling agents (<code>src/server/voice-service.ts</code>, <code>src/app/api/voice/</code>).</li>
+</ul>
+<hr />
+<h2>3. Existing Simulation &amp; ML Service Architecture</h2>
+<p>Prior to Phase 14:
+1. <code>src/lib/isi/simulation.ts</code> and <code>SimulationContext.tsx</code> generated simulated physiological samples (<code>heartRate</code>, <code>hrv</code>, <code>spo2</code>, <code>ppg</code>, <code>ecg</code>, <code>imu</code>, <code>signalQuality</code>).
+2. Client-side scoring in <code>src/lib/isi/scoring.ts</code> used an inline mathematical heuristic (<code>getSimulatedModelProbability</code>) to approximate model behavior in the browser.
+3. Server route <code>/api/ml/predict</code> existed to accept 26 Matrix A features, but was only called from an isolated evaluation card on <code>/insights</code>.</p>
+<hr />
+<h2>4. Phase 14 Integration Architecture</h2>
+<p>The complete end-to-end production data flow was established:</p>
+<pre><code>Browser Client (SimulationContext.tsx)
+  │ (Extracts 26 Matrix A features from simulated physiological waveforms)
+  ▼
+Next.js Server API (POST /api/ml/predict)
+  │ (Validates schema, types, finite bounds; sanitizes server paths)
+  ▼
+Upstream ML Service (Cloud Run or Local Daemon / CLI Fallback)
+  │ (Loads frozen beatahead_phase5_model.joblib; SHA-256 verified)
+  ▼
+Frozen XGBoost Model
+  │ (Evaluates 26 features -&gt; p_model ∈ [0, 1])
+  ▼
+Next.js Server Gateway
+  │ (Returns standardized probability, threshold 0.156742, alert status)
+  ▼
+Client-Side ISI Engine (src/lib/isi/engine.ts)
+  │ (Computes E_model(p), D_auto, D_perf, M_trend, Gated Anti-Drift Baseline)
+  ▼
+Composite ISI (0–100) &amp; Product State Machine
+  │ (Normal/Stable vs Elevated Model Evidence vs Elevated Trend vs Insufficient Quality)
+  ▼
+BeatAhead UI Components
+  ├── DashboardStats (p_model badge, threshold, alert status)
+  ├── ISIGauge (Model Evidence %, Model State NORMAL/ALERT)
+  ├── RiskTrendBanner (Early-warning advisory)
+  ├── Signal Processing Pipeline (/monitor)
+  ├── 26-Feature Matrix A Vector Table (/signals)
+  ├── AI Insights Explainability Card (/insights)
+  └── Clinician Export Report with Frozen Model Provenance (/clinician)
+</code></pre>
+<hr />
+<h2>5. Files Changed &amp; Added</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">File</th>
+<th style="text-align: center;">Action</th>
+<th style="text-align: left;">Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>src/lib/isi/matrix_a.ts</code></td>
+<td style="text-align: center;"><strong>NEW</strong></td>
+<td style="text-align: left;">Generates the exact 26-feature Matrix A vector from simulated physiological waveforms matching <code>models/feature_schema.json</code> bounds and canonical order.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>src/lib/isi/scoring.ts</code></td>
+<td style="text-align: center;"><strong>MODIFIED</strong></td>
+<td style="text-align: left;">Updated <code>ScoringInput</code> to accept real <code>modelProbability</code> from <code>/api/ml/predict</code>, decoupling model probability from UI heuristics.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>src/lib/simulation/SimulationContext.tsx</code></td>
+<td style="text-align: center;"><strong>MODIFIED</strong></td>
+<td style="text-align: left;">Connects simulation ticks and scenario switches to <code>/api/ml/predict</code> asynchronously; maintains model state and passes real model probability into the ISI engine.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>src/components/dashboard/DashboardStats.tsx</code></td>
+<td style="text-align: center;"><strong>MODIFIED</strong></td>
+<td style="text-align: left;">Displays live ML Model status card (<code>p_model</code>, operating threshold $\tau = 15.67\%$, <code>NORMAL</code> vs <code>ALERT</code>).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>src/app/monitor/page.tsx</code></td>
+<td style="text-align: center;"><strong>MODIFIED</strong></td>
+<td style="text-align: left;">Embeds Frozen XGBoost Matrix A into the Signal Processing Pipeline; adds early-warning alert banner when threshold is exceeded.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>src/app/signals/page.tsx</code></td>
+<td style="text-align: center;"><strong>MODIFIED</strong></td>
+<td style="text-align: left;">Adds dedicated 26-feature Matrix A inspection card displaying all 26 canonical features, physiological ranges, and active values.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>src/app/clinician/page.tsx</code></td>
+<td style="text-align: center;"><strong>MODIFIED</strong></td>
+<td style="text-align: left;">Embeds frozen model provenance (<code>BeatAhead Phase 5 XGBoost</code>, threshold <code>0.156742</code>, artifact hash) in the JSON export report and UI banner.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>tests/test_website_ml_integration.py</code></td>
+<td style="text-align: center;"><strong>NEW</strong></td>
+<td style="text-align: left;">Automated regression test verifying end-to-end data flow from simulated inputs to frozen model inference and dashboard outputs.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>6. Feature Mapping: Simulated Waves to 26 Matrix A Features</h2>
+<p>All 26 features strictly adhere to <code>models/feature_schema.json</code>:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">Feature #</th>
+<th style="text-align: left;">Canonical Feature Name</th>
+<th style="text-align: center;">Modality</th>
+<th style="text-align: left;">Physiological Source</th>
+<th style="text-align: center;">Bounds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;">1</td>
+<td style="text-align: left;"><code>ecg_hr_mean</code></td>
+<td style="text-align: center;">ECG</td>
+<td style="text-align: left;"><code>sample.heartRate</code></td>
+<td style="text-align: center;">[20.0, 300.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">2</td>
+<td style="text-align: left;"><code>ecg_hr_std</code></td>
+<td style="text-align: center;">ECG</td>
+<td style="text-align: left;">Heart rate std dev (autonomic tone)</td>
+<td style="text-align: center;">[0.0, 150.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">3</td>
+<td style="text-align: left;"><code>ecg_rr_sdnn</code></td>
+<td style="text-align: center;">ECG</td>
+<td style="text-align: left;"><code>sample.hrv</code> (SDNN in ms)</td>
+<td style="text-align: center;">[0.0, 1000.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">4</td>
+<td style="text-align: left;"><code>ecg_rr_rmssd</code></td>
+<td style="text-align: center;">ECG</td>
+<td style="text-align: left;">Estimated RMSSD from HRV</td>
+<td style="text-align: center;">[0.0, 1000.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">5</td>
+<td style="text-align: left;"><code>ecg_pnn50</code></td>
+<td style="text-align: center;">ECG</td>
+<td style="text-align: left;">Percentage RR differences &gt; 50 ms</td>
+<td style="text-align: center;">[0.0, 100.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">6</td>
+<td style="text-align: left;"><code>ecg_r_amp_mv</code></td>
+<td style="text-align: center;">ECG</td>
+<td style="text-align: left;">R-wave peak amplitude (mV)</td>
+<td style="text-align: center;">[-2.0, 15.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">7</td>
+<td style="text-align: left;"><code>ecg_qrs_width_ms</code></td>
+<td style="text-align: center;">ECG</td>
+<td style="text-align: left;">QRS complex duration (ms)</td>
+<td style="text-align: center;">[30.0, 300.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">8</td>
+<td style="text-align: left;"><code>ecg_sqi</code></td>
+<td style="text-align: center;">ECG</td>
+<td style="text-align: left;">ECG signal quality ratio</td>
+<td style="text-align: center;">[0.0, 1.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">9</td>
+<td style="text-align: left;"><code>pat_median_ms</code></td>
+<td style="text-align: center;">ECG+PPG</td>
+<td style="text-align: left;">Median Pulse Arrival Time delay</td>
+<td style="text-align: center;">[50.0, 600.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">10</td>
+<td style="text-align: left;"><code>pat_iqr_ms</code></td>
+<td style="text-align: center;">ECG+PPG</td>
+<td style="text-align: left;">PAT Interquartile Range</td>
+<td style="text-align: center;">[0.0, 500.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">11</td>
+<td style="text-align: left;"><code>pat_valid_fraction</code></td>
+<td style="text-align: center;">ECG+PPG</td>
+<td style="text-align: left;">Plausible PAT cycle fraction</td>
+<td style="text-align: center;">[0.0, 1.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">12</td>
+<td style="text-align: left;"><code>pat_valid</code></td>
+<td style="text-align: center;">ECG+PPG</td>
+<td style="text-align: left;">Binary flag (valid fraction &gt;= 30%)</td>
+<td style="text-align: center;">[0, 1]</td>
+</tr>
+<tr>
+<td style="text-align: center;">13</td>
+<td style="text-align: left;"><code>ppg_pulse_amp</code></td>
+<td style="text-align: center;">PPG</td>
+<td style="text-align: left;">Peak-to-trough pulse amplitude</td>
+<td style="text-align: center;">[0.0, 50000.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">14</td>
+<td style="text-align: left;"><code>ppg_perfusion_index</code></td>
+<td style="text-align: center;">PPG</td>
+<td style="text-align: left;">AC/DC perfusion ratio (%)</td>
+<td style="text-align: center;">[0.0, 10000.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">15</td>
+<td style="text-align: left;"><code>ppg_crest_time_ms</code></td>
+<td style="text-align: center;">PPG</td>
+<td style="text-align: left;">Pulse foot to systolic peak time</td>
+<td style="text-align: center;">[20.0, 500.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">16</td>
+<td style="text-align: left;"><code>ppg_sqi</code></td>
+<td style="text-align: center;">PPG</td>
+<td style="text-align: left;">PPG signal quality ratio</td>
+<td style="text-align: center;">[0.0, 1.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">17</td>
+<td style="text-align: left;"><code>spo2_mean</code></td>
+<td style="text-align: center;">SpO2</td>
+<td style="text-align: left;">Mean oxygen saturation (%)</td>
+<td style="text-align: center;">[40.0, 100.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">18</td>
+<td style="text-align: left;"><code>spo2_min</code></td>
+<td style="text-align: center;">SpO2</td>
+<td style="text-align: left;">Nadir oxygen saturation (%)</td>
+<td style="text-align: center;">[30.0, 100.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">19</td>
+<td style="text-align: left;"><code>spo2_std</code></td>
+<td style="text-align: center;">SpO2</td>
+<td style="text-align: left;">Saturation trend std dev (%)</td>
+<td style="text-align: center;">[0.0, 40.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">20</td>
+<td style="text-align: left;"><code>spo2_desat_count</code></td>
+<td style="text-align: center;">SpO2</td>
+<td style="text-align: left;">Duration with SpO2 &lt;= 90% (seconds)</td>
+<td style="text-align: center;">[0, 300]</td>
+</tr>
+<tr>
+<td style="text-align: center;">21</td>
+<td style="text-align: left;"><code>st_obs_mean</code></td>
+<td style="text-align: center;">ST_II</td>
+<td style="text-align: left;">Mean ST level in Lead II (mm)</td>
+<td style="text-align: center;">[-15.0, 15.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">22</td>
+<td style="text-align: left;"><code>st_obs_median</code></td>
+<td style="text-align: center;">ST_II</td>
+<td style="text-align: left;">Median ST level in Lead II (mm)</td>
+<td style="text-align: center;">[-15.0, 15.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">23</td>
+<td style="text-align: left;"><code>st_obs_min</code></td>
+<td style="text-align: center;">ST_II</td>
+<td style="text-align: left;">Minimum ST level in Lead II (mm)</td>
+<td style="text-align: center;">[-15.0, 15.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">24</td>
+<td style="text-align: left;"><code>st_obs_std</code></td>
+<td style="text-align: center;">ST_II</td>
+<td style="text-align: left;">ST level std dev in Lead II (mm)</td>
+<td style="text-align: center;">[0.0, 15.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">25</td>
+<td style="text-align: left;"><code>st_delta_baseline</code></td>
+<td style="text-align: center;">ST_II</td>
+<td style="text-align: left;">ST shift from baseline (mm)</td>
+<td style="text-align: center;">[-15.0, 15.0]</td>
+</tr>
+<tr>
+<td style="text-align: center;">26</td>
+<td style="text-align: left;"><code>st_slope_mm_min</code></td>
+<td style="text-align: center;">ST_II</td>
+<td style="text-align: left;">Linear regression ST slope (mm/min)</td>
+<td style="text-align: center;">[-20.0, 20.0]</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>7. Model Output &amp; ISI Engine Integration</h2>
+<ul>
+<li><strong>Model Operating Threshold</strong>: Exactly <code>0.156742</code> (derived from $F_1$ optimization during Phase 5).</li>
+<li><strong>Model Output</strong>: $p_{\text{model}} \in [0, 1]$.</li>
+<li><strong>Piecewise Sigmoidal Transformation</strong>:
+  $$E_{\text{model}}(p) = \begin{cases} 0.5 \times \left(\frac{p}{\tau}\right)^{\gamma_1} &amp; \text{if } p &lt; \tau \ 1 - 0.5 \times \left(\frac{1 - p}{1 - \tau}\right)^{\gamma_2} &amp; \text{if } p \ge \tau \end{cases}$$
+  Where $\tau = 0.156742$, $\gamma_1 = 1.4$, $\gamma_2 = 4.0$.
+  At $p = \tau = 0.156742$, $E_{\text{model}} \equiv 0.500000$ exactly.</li>
+<li><strong>Product Score Composition</strong>:
+  $$\text{ISI} = \text{clamp}<em>{[0, 100]}\left(40.0 + 60.0 \times \left(0.45 E</em>{\text{model}} + 0.30 D_{\text{auto}} + 0.25 D_{\text{perf}} + M_{\text{trend}}\right)\right)$$</li>
+<li><strong>State Machine Integration</strong>:</li>
+<li><code>Normal / Stable</code>: $p_{\text{model}} &lt; 0.156742$, clean signals, stable trajectory ($\text{ISI} \approx 35–45$).</li>
+<li><code>Elevated Model Evidence</code>: $p_{\text{model}} \ge 0.156742$ ($E_{\text{model}} \ge 0.50$), triggering early-warning alert badge ($\text{ISI} \approx 60–80$).</li>
+<li><code>Elevated ISI Trend</code>: Rising multi-source trajectory without single-threshold breach.</li>
+<li><code>Insufficient Signal Quality</code>: Overall SQI $&lt; 0.35$ (motion artifact scenario).</li>
+<li><code>Baseline Establishing</code>: Monitoring time $&lt; 600\text{ s}$.</li>
+</ul>
+<hr />
+<h2>8. Security &amp; Privacy Audit</h2>
+<ul>
+<li><strong>Zero Client-Side Model Exposure</strong>:</li>
+<li>Confirmed 0 <code>.joblib</code>, <code>.pkl</code>, <code>.pt</code>, <code>.onnx</code>, or <code>.bin</code> files in <code>C:\ischemic\public\</code>.</li>
+<li>Confirmed 0 model binaries in <code>.next/</code> client bundles or JavaScript chunks.</li>
+<li><strong>Server Gateway Boundary</strong>:</li>
+<li>The browser client never calls the Cloud Run service directly.</li>
+<li>All ML inference passes through the Next.js server route <code>/api/ml/predict</code>.</li>
+<li><strong>Secret Protection</strong>:</li>
+<li><code>ML_SERVICE_URL</code> and <code>ML_SERVICE_AUTH_TOKEN</code> have no <code>NEXT_PUBLIC_</code> prefix and remain server-only.</li>
+<li><strong>Error Sanitization</strong>:</li>
+<li>In the event of an upstream service failure, <code>/api/ml/predict</code> returns a generic 503 error without leaking filesystem paths, usernames, or Python tracebacks.</li>
+</ul>
+<hr />
+<h2>9. Comprehensive Verification &amp; Build Results</h2>
+<h3>A. Python Regression Test Suite (72 / 72 Tests Passed)</h3>
+<pre><code>Ran 72 tests in 8.445s
+OK
+- tests/test_inference.py: 11 / 11 passed
+- tests/test_staging_integration.py: 14 / 14 passed
+- tests/test_isi_engine.py: 18 / 18 passed
+- tests/test_end_to_end_validation.py: 10 / 10 passed
+- tests/test_container_service.py: 13 / 13 passed
+- tests/test_website_ml_integration.py: 6 / 6 passed
+</code></pre>
+<h3>B. TypeScript Static Verification</h3>
+<pre><code>node node_modules\typescript\bin\tsc --noEmit
+Exit Code: 0 (0 errors)
+</code></pre>
+<h3>C. Next.js Production Build</h3>
+<pre><code>npm.cmd run build
+✓ Compiled successfully in 43s
+✓ Linting and checking validity of types ...
+✓ Generating static pages (38/38)
+Exit Code: 0 across all 38 application routes
+</code></pre>
+<hr />
+<h2>10. Simulated-Input Demonstration Behavior</h2>
+<p>When running in simulated demonstration mode:
+1. <strong>Normal Scenario</strong>:
+   - Simulated vitals remain normative ($HR \approx 68\text{ bpm}$, $SDNN \approx 48\text{ ms}$, $ST \approx +0.08\text{ mm}$).
+   - 26-feature Matrix A vector produces $p_{\text{model}} \approx 0.005–0.030 &lt; 0.156742$.
+   - ISI gauge reads $\approx 35–42$ ("Optimal / Low Risk"), state displays <code>NORMAL (&lt; 0.156742)</code>.
+2. <strong>Stress Event Scenario</strong>:
+   - Acute ischemic profile triggers progressive ST sagging ($ST \rightarrow -1.65\text{ mm}$), tachycardia ($HR \rightarrow 94\text{ bpm}$), and PAT delay ($PAT \rightarrow 285\text{ ms}$).
+   - 26-feature Matrix A vector produces $p_{\text{model}} \approx 0.32–0.45 \ge 0.156742$.
+   - ISI gauge rises to $\approx 68–82$, state switches to <code>ALERT (≥ 0.156742)</code>, triggering the early-warning advisory banner.
+3. <strong>Motion Artifact Scenario</strong>:
+   - Severe IMU motion degrades SQI ($Q_{\text{ecg}} &lt; 0.50$, $Q_{\text{ppg}} &lt; 0.50$).
+   - Signal quality gate enforces <code>Insufficient Signal Quality</code>, preventing false alarm precision.</p>
+<hr />
+<h2>11. Remaining Production Limitations</h2>
+<ol>
+<li><strong>Simulated Input Prototype</strong>: The website currently runs on simulated physiological streaming for demonstration; real wearable hardware streaming (via Bluetooth LE / WebSocket) requires physical wearable sensor drivers.</li>
+<li><strong>Cloud Run Provisioning</strong>: The containerized ML service is fully packaged and ready (<code>Dockerfile</code>, <code>requirements.txt</code>), but live deployment to Google Cloud Run remains blocked pending external GCP CLI setup and credentials (as documented in Phase 13).</li>
+<li><strong>Investigational Status</strong>: BeatAhead is an investigational research prototype for surgical/clinical monitoring early-warning trend analysis and is not FDA approved for diagnostic use.</li>
+</ol>
+</body>
+</html>

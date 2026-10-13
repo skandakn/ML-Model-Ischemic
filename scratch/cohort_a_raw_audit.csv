@@ -1,0 +1,51 @@
+cohort,caseid,all_required,has_ecg_ii,has_pleth,has_spo2,has_st_ii,has_ecg_v5,has_st_v5,duration_hrs,department,age,preop_htn,preop_dm,cad_cabg,opname,dx
+Cohort A,2605,True,True,True,True,True,True,False,3.71,General surgery,91.0,1,1,False,Exploratory laparotomy,Pneumoperitoneum
+Cohort A,3614,True,True,True,True,True,True,False,1.83,General surgery,90.0,1,1,False,Cholecystectomy,Chronic cholecystitis
+Cohort A,4290,True,True,True,True,True,True,False,1.76,General surgery,85.0,1,1,False,Embolectomy,Atherosclerosis obliterans
+Cohort A,2043,True,True,True,True,True,True,False,1.96,General surgery,84.0,1,1,False,Simple mastectomy,Infiltrating ductal carcinoma of breast left
+Cohort A,4247,True,True,True,True,True,True,False,2.45,General surgery,84.0,1,1,False,Intra-abdominal arterial bypass graft,Sarcoma
+Cohort A,2034,True,True,True,True,True,True,False,2.37,General surgery,83.0,1,1,False,Total colectomy,Ischemic colitis
+Cohort A,3390,True,True,True,True,True,True,False,2.51,General surgery,83.0,1,1,False,Endarterectomy,Type 2 diabetes mellitus with diabetic foot ulcer and gangrene
+Cohort A,3526,True,True,True,True,True,True,False,2.04,General surgery,83.0,1,1,False,Hemicolectomy,"Colon cancer, ascending"
+Cohort A,758,True,True,True,True,True,True,False,2.26,General surgery,82.0,1,1,False,Exploratory laparotomy,Esophageal cancer
+Cohort A,1159,True,True,True,True,True,True,False,2.4,General surgery,82.0,1,0,False,Cholecystectomy,Mirizzi syndrome without obstruction
+Cohort A,2197,True,True,True,True,True,False,False,5.15,General surgery,54.0,1,1,False,Pylorus preserving gastrectomy,Early gastric cancer
+Cohort A,2772,False,True,True,True,False,True,False,3.33,General surgery,78.0,0,0,False,Distal gastrectomy,Early gastric cancer
+Cohort A,4272,True,True,True,True,True,True,False,5.92,General surgery,37.0,0,0,False,Kidney transplantation,Chronic kidney disease 
+Cohort A,2824,True,True,True,True,True,False,False,5.41,General surgery,67.0,1,1,False,Distal gastrectomy,Early gastric cancer 
+Cohort A,3037,True,True,True,True,True,False,False,6.55,Thoracic surgery,61.0,1,1,False,Ivor Lewis operation,Esophageal cancer
+Cohort A,3632,True,True,True,True,True,True,False,4.46,General surgery,31.0,0,0,False,Gastrojejunostomy,"Neuroendocrine tumor of pancreas, G2"
+Cohort A,2800,True,True,True,True,True,False,False,3.8,General surgery,58.0,0,0,False,Hemicolectomy,"Colon cancer, ascending"
+Cohort A,3192,False,True,True,True,False,True,False,3.43,General surgery,50.0,0,0,False,Donor nephrectomy,"Kidney donor, live related"
+Cohort A,4519,True,True,True,True,True,True,False,2.48,General surgery,56.0,0,0,False,Liver sectionectomy,Hepatocellular carcinoma
+Cohort A,2854,True,True,True,True,True,True,False,2.19,General surgery,60.0,0,0,False,Exploratory laparotomy,Cecal cancer
+Cohort A,4038,True,True,True,True,True,True,False,1.31,General surgery,76.0,0,0,False,Pylorus preserving gastrectomy,Early gastric cancer
+Cohort A,2037,True,True,True,True,True,False,False,2.71,General surgery,63.0,0,0,False,Anterior resection,"Colon cancer, sigmoid"
+Cohort A,2717,True,True,True,True,True,True,False,3.11,Thoracic surgery,74.0,1,0,False,Lung sgmentectomy,Lung cancer right
+Cohort A,3027,True,True,True,True,True,False,False,1.36,Thoracic surgery,19.0,0,0,False,Excision,Fibrous dysplasia of bone site unspecified
+Cohort A,4390,True,True,True,True,True,False,False,3.43,Thoracic surgery,78.0,0,0,False,Lung lobectomy,"Abnormal chest CT, lung"
+Cohort A,4220,True,True,True,True,True,True,False,0.74,General surgery,42.0,0,0,False,Breast-conserving surgery,Infiltrating ductal carcinoma of breast right
+Cohort A,2697,True,True,True,True,True,False,False,3.35,Thoracic surgery,32.0,0,0,False,Lung lobectomy,Hemoptysis 
+Cohort A,4423,True,True,True,True,True,True,False,1.6,General surgery,58.0,0,0,False,Hartmann procedure,Diverticulosis of large intestine with perforation and abscess without bleeding
+Cohort A,2085,True,True,True,True,True,False,False,1.43,Thoracic surgery,65.0,0,0,False,Clagett procedure,Empyema without bronchopleural fistula 
+Cohort A,3505,True,True,True,True,True,True,False,4.45,General surgery,39.0,1,0,False,Kidney transplantation,"Chronic kidney disease, stage 5"
+Cohort A,3042,False,True,True,True,False,False,False,3.18,Thoracic surgery,57.0,1,0,False,Lung lobectomy,Lung cancer left
+Cohort A,3535,True,True,True,True,True,False,False,3.45,General surgery,47.0,0,0,False,Hemicolectomy,"Colon cancer, ascending"
+Cohort A,4252,True,True,True,True,True,True,False,5.75,General surgery,80.0,0,0,False,Hemihepatectomy,"Cholangiocarcinoma, intrahepatic"
+Cohort A,2727,True,True,True,True,True,False,False,3.89,General surgery,58.0,1,0,False,Liver sectionectomy,Hepatocellular carcinoma 
+Cohort A,3426,True,True,True,True,True,False,False,2.77,Thoracic surgery,61.0,0,0,False,Lung wedge resection,Solitary pulmonary nodule
+Cohort A,4236,True,True,True,True,True,True,False,5.1,General surgery,53.0,0,0,False,Hemihepatectomy,Hepatocellular carcinoma
+Cohort A,4243,True,True,True,True,True,False,False,0.79,General surgery,21.0,0,0,False,Fistulectomy,Anal fistula 
+Cohort A,4434,True,True,True,True,True,True,False,1.27,General surgery,73.0,0,0,False,Hernia repair,Inguinal hernia not specified as recurrent
+Cohort A,2725,True,True,True,True,True,True,False,1.62,Gynecology,36.0,0,0,False,Modified Shirodkar operation,Antenatal care for high risk pregnancy
+Cohort A,3418,True,True,True,True,True,True,False,4.01,General surgery,59.0,0,0,False,Liver segmentectomy,Hepatocellular carcinoma 
+Cohort A,4437,True,True,True,True,True,False,False,2.86,General surgery,43.0,0,0,False,Ileocecectomy,Intussusception
+Cohort A,2081,True,True,True,True,True,False,False,1.23,Thoracic surgery,18.0,0,0,False,Excision,Mediastinal germ cell tumor
+Cohort A,2623,True,True,True,True,True,True,False,1.37,General surgery,79.0,1,1,False,Exploratory laparotomy,Ileitis 
+Cohort A,4246,False,True,True,True,False,True,False,4.39,General surgery,64.0,0,0,False,Donor nephrectomy,Kidney donor
+Cohort A,3530,True,True,True,True,True,False,False,1.28,General surgery,65.0,1,1,False,Gastric wedge resection,"Gastrointestinal stromal tumor of stomach, benign"
+Cohort A,4568,True,True,True,True,True,False,False,4.47,General surgery,70.0,1,0,False,Total gastrectomy,Early gastric cancer
+Cohort A,2075,True,True,True,True,True,False,False,2.69,Thoracic surgery,33.0,0,0,False,Empyemectomy,Empyema necessitatis 
+Cohort A,4435,True,True,True,True,True,False,False,2.02,Thoracic surgery,59.0,0,0,False,Thymectomy,Mediastinal mass
+Cohort A,4244,True,True,True,True,True,False,False,0.77,General surgery,77.0,0,0,False,Hernia repair,Right inguinal hernia recurrent
+Cohort A,4234,True,True,True,True,True,True,False,1.4,General surgery,32.0,0,0,False,Breast-conserving surgery,Ductal carcinoma in situ of breast right

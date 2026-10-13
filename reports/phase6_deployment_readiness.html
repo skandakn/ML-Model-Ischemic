@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>BeatAhead Implementation Document</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; line-height: 1.55; font-size: 10.5pt; margin: 0; }
+  h1 { font-size: 18pt; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 6px; page-break-after: avoid; }
+  h2 { font-size: 13pt; color: #1e3a8a; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-top: 22px; page-break-after: avoid; }
+  h3 { font-size: 11pt; color: #1d4ed8; margin-top: 16px; page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 8.5pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background-color: #0f2b48; color: #ffffff; }
+  tr:nth-child(even) { background-color: #f8fafc; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background-color: #f1f5f9; padding: 2px 4px; }
+  pre { background-color: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 6px; font-size: 8pt; line-height: 1.35; page-break-inside: avoid; }
+  blockquote { margin: 10px 0; padding: 8px 14px; background-color: #eff6ff; border-left: 4px solid #3b82f6; color: #1e40af; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>BeatAhead Phase 6 Model Freeze &amp; Deployment Readiness Report</h1>
+<p><strong>Document:</strong> <code>reports/phase6_deployment_readiness.md</code><br />
+<strong>Execution Date:</strong> 2026-09-22 19:24:00<br />
+<strong>Model Name:</strong> <code>beatahead_phase5_model</code> (<code>v1.0.0</code>)<br />
+<strong>Status:</strong> FROZEN &amp; PACKAGED — READY FOR STAGING INTEGRATION (WEBSITE CODE UNTOUCHED)  </p>
+<hr />
+<h2>1. Executive Summary</h2>
+<p>Phase 6 Model Freeze and Deployment Packaging is complete. The exact deployment model, preprocessing pipeline, feature schema, decision threshold, and checksum manifests have been permanently serialized to <code>models/</code>. A production-grade inference engine (<code>src/inference.py</code>) and a comprehensive independent test suite (<code>tests/test_inference.py</code>) have been created and verified.</p>
+<hr />
+<h2>2. Selected Deployment Candidate Specification</h2>
+<pre><code>+----------------------------------------------------------------------------------------------------+
+|                                 DEPLOYMENT CANDIDATE SPECIFICATION                                 |
++------------------------------------+---------------------------------------------------------------+
+| Specification Item                 | Exact Frozen Value                                            |
++------------------------------------+---------------------------------------------------------------+
+| Model Name                         | beatahead_phase5_model                                        |
+| Version                            | 1.0.0                                                         |
+| Machine Learning Algorithm         | XGBClassifier (Extreme Gradient Boosting Trees)               |
+| Framework &amp; Version                | xgboost v3.4.1 (Python 3.13)                                  |
+| Primary Artifact Path              | models/beatahead_phase5_model.joblib                          |
+| Artifact File Size &amp; SHA-256       | 43,693 bytes | 528ff3f8f5edac6f3baf5aef8715d5e86f478462...    |
+| Feature Matrix                     | Matrix A (Full Multimodal + Pre-Event ST)                     |
+| Feature Count                      | Exactly 26 features                                           |
+| Feature Schema Path                | models/feature_schema.json                                    |
+| Metadata Manifest Path             | models/MODEL_MANIFEST.json                                    |
+| Training Dataset Version           | VitalDB 100-Case Cohort (80 Development Cases, 8,571 windows) |
+| Preprocessing Pipeline             | SimpleImputer(strategy='median') fit on 80 Dev cases          |
+| Deployment Decision Threshold      | 0.156742 (calibrated via Dev out-of-fold F1 maximization)     |
+| Alert Lead Time Guarantee          | 5-minute blank gap preceding 5-minute target evaluation       |
++------------------------------------+---------------------------------------------------------------+
+</code></pre>
+<hr />
+<h2>3. Frozen Feature Order (26 Features)</h2>
+<p>The inference pipeline strictly enforces the canonical 26-feature sequence defined in <code>models/feature_schema.json</code>:</p>
+<pre><code> 1. ecg_hr_mean         [bpm]     Mean heart rate over 5-minute observation window
+ 2. ecg_hr_std          [bpm]     Heart rate standard deviation (autonomic variability)
+ 3. ecg_rr_sdnn         [ms]      SDNN: Standard deviation of normal-to-normal RR intervals
+ 4. ecg_rr_rmssd        [ms]      RMSSD: Root mean square of successive RR interval differences
+ 5. ecg_pnn50           [%]       Percentage of adjacent RR intervals differing by &gt; 50 ms
+ 6. ecg_r_amp_mv        [mV]      Median R-wave peak amplitude above isoelectric baseline
+ 7. ecg_qrs_width_ms    [ms]      Estimated QRS complex duration
+ 8. ecg_sqi             [ratio]   ECG signal quality index (fraction of clean beats)
+ 9. pat_median_ms       [ms]      Median Pulse Arrival Time (QRS peak to PPG foot delay)
+10. pat_iqr_ms          [ms]      Interquartile range of PAT (vascular compliance stability)
+11. pat_valid_fraction  [ratio]   Fraction of cardiac cycles yielding physiological PAT
+12. pat_valid           [binary]  Binary flag indicating &gt;= 30% valid PAT beats
+13. ppg_pulse_amp       [a.u.]    Median photoplethysmogram peak-to-trough pulse amplitude
+14. ppg_perfusion_index [%]       Photoplethysmogram Perfusion Index (AC/DC ratio)
+15. ppg_crest_time_ms   [ms]      PPG foot to systolic peak crest time (vascular stiffness)
+16. ppg_sqi             [ratio]   PPG signal quality index (clipping and saturation detection)
+17. spo2_mean           [%]       Mean pulse oximeter arterial oxygen saturation
+18. spo2_min            [%]       Minimum arterial oxygen saturation
+19. spo2_std            [%]       Standard deviation of pulse oximeter saturation trend
+20. spo2_desat_count    [seconds] Duration of desaturation episodes (SpO2 &lt;= 90%)
+21. st_obs_mean         [mm]      Mean ST segment deviation in Lead II
+22. st_obs_median       [mm]      Median ST segment deviation in Lead II
+23. st_obs_min          [mm]      Minimum ST segment deviation in Lead II
+24. st_obs_std          [mm]      Standard deviation of ST segment in Lead II
+25. st_delta_baseline   [mm]      ST shift relative to initial 10-minute surgical baseline
+26. st_slope_mm_min     [mm/min]  ST segment linear regression slope across observation window
+</code></pre>
+<hr />
+<h2>4. Expected Input &amp; Output Format</h2>
+<h3>Input Format (<code>predict_single_window</code>):</h3>
+<p>Accepts a dictionary, pandas Series, or single-row DataFrame containing all 26 feature keys:</p>
+<pre><code class="language-python">sample_input = {
+    &quot;ecg_hr_mean&quot;: 75.4,
+    &quot;ecg_hr_std&quot;: 6.8,
+    &quot;ecg_rr_sdnn&quot;: 55.2,
+    &quot;ecg_rr_rmssd&quot;: 42.1,
+    &quot;ecg_pnn50&quot;: 8.5,
+    &quot;ecg_r_amp_mv&quot;: 0.85,
+    &quot;ecg_qrs_width_ms&quot;: 95.0,
+    &quot;ecg_sqi&quot;: 0.98,
+    &quot;pat_median_ms&quot;: 220.0,
+    &quot;pat_iqr_ms&quot;: 45.0,
+    &quot;pat_valid_fraction&quot;: 0.85,
+    &quot;pat_valid&quot;: 1,
+    &quot;ppg_pulse_amp&quot;: 32.5,
+    &quot;ppg_perfusion_index&quot;: 85.0,
+    &quot;ppg_crest_time_ms&quot;: 110.0,
+    &quot;ppg_sqi&quot;: 1.0,
+    &quot;spo2_mean&quot;: 99.5,
+    &quot;spo2_min&quot;: 98.0,
+    &quot;spo2_std&quot;: 0.4,
+    &quot;spo2_desat_count&quot;: 0,
+    &quot;st_obs_mean&quot;: -0.45,
+    &quot;st_obs_median&quot;: -0.50,
+    &quot;st_obs_min&quot;: -0.85,
+    &quot;st_obs_std&quot;: 0.15,
+    &quot;st_delta_baseline&quot;: -0.35,
+    &quot;st_slope_mm_min&quot;: -0.025
+}
+</code></pre>
+<h3>Output Format:</h3>
+<p>Returns a structured dictionary with continuous probability and binary decision thresholding:</p>
+<pre><code class="language-python">{
+    &quot;model_probability&quot;: 0.284152,        # Continuous probability in [0.0, 1.0]
+    &quot;calibrated_probability&quot;: 0.284152,   # Probability calibrated for logloss
+    &quot;decision_threshold&quot;: 0.156742,       # Frozen Phase 5 deployment cutoff
+    &quot;binary_early_warning&quot;: 1,            # 1 = Impending Ischemia, 0 = Normal
+    &quot;alert_status&quot;: &quot;ALERT&quot;,              # &quot;ALERT&quot; if prob &gt;= threshold else &quot;NORMAL&quot;
+    &quot;lead_time_minutes&quot;: 5,               # Guaranteed advance lead time
+    &quot;model_version&quot;: &quot;1.0.0&quot;,             # Model artifact release tag
+    &quot;feature_schema_version&quot;: &quot;1.0.0&quot;,    # Feature schema version
+    &quot;model_name&quot;: &quot;beatahead_phase5_model&quot;
+}
+</code></pre>
+<h3>Strict Input Rejection Rules:</h3>
+<p>The engine (<code>src/inference.py</code>) strictly raises <code>FeatureValidationError</code> upon:
+- Missing any of the 26 required features.
+- Including extra unexpected features.
+- <code>NaN</code> or infinite (<code>inf</code>) values in any feature.
+- Non-numeric strings or <code>None</code> values.
+- Values violating defined physiological ranges (e.g., <code>ecg_hr_mean</code> $&gt; 300\text{ bpm}$ or <code>spo2_mean</code> $&gt; 100\%$).</p>
+<hr />
+<h2>5. Verification &amp; Test Suite Results</h2>
+<p>The independent test suite (<code>tests/test_inference.py</code>) was executed in a clean Python process:</p>
+<pre><code>Ran 11 tests in 1.592s
+
+OK
+</code></pre>
+<ul>
+<li><strong>Test 1 (Valid Input)</strong>: PASS (All output fields present, probability in $[0, 1]$).</li>
+<li><strong>Test 2 (Missing Feature)</strong>: PASS (<code>FeatureValidationError</code> raised).</li>
+<li><strong>Test 3 (Extra Feature)</strong>: PASS (<code>FeatureValidationError</code> raised).</li>
+<li><strong>Test 4 (NaN Value)</strong>: PASS (<code>FeatureValidationError</code> raised).</li>
+<li><strong>Test 5 (Infinity Value)</strong>: PASS (<code>FeatureValidationError</code> raised).</li>
+<li><strong>Test 6 (Wrong Data Type)</strong>: PASS (<code>FeatureValidationError</code> raised).</li>
+<li><strong>Test 7 (Deterministic Repeated Inference)</strong>: PASS (10 runs yielded bit-for-bit identical probabilities).</li>
+<li><strong>Test 8 (Feature Order Invariance)</strong>: PASS (Shuffling dictionary keys yielded identical probability).</li>
+<li><strong>Test 9 (Threshold Logic)</strong>: PASS ($\ge 0.156742 \to \text{ALERT}$, $&lt; 0.156742 \to \text{NORMAL}$).</li>
+<li><strong>Test 10 (Clean Process Loading)</strong>: PASS (Joblib model and JSON schema load cleanly).</li>
+<li><strong>Test 11 (Physiological Bounds Check)</strong>: PASS (Out-of-range HR and SpO2 strictly rejected).</li>
+<li><strong>Reproducibility Verification (TASK 8)</strong>: Confirmed identical output across independent fresh Python process invocations.</li>
+</ul>
+<hr />
+<h2>6. Known Limitations &amp; Failure Modes</h2>
+<ol>
+<li><strong>Insidious vs. Abrupt Onset Sensitivity</strong>:
+   - The model is highly sensitive to insidious, gradual pre-event ST micro-sagging ($\text{mean ST} = -0.53\text{ mm}$ during $T_{\text{obs}}$).
+   - In patients where ischemia occurs precipitously without pre-event drift ($\text{mean ST} = +0.27\text{ mm}$ during $T_{\text{obs}}$), the model remains silent to prevent false alarms, achieving <strong>99.7% specificity</strong>. A real-time threshold reflex ($\text{ST} \le -1.0\text{ mm}$) must operate alongside the model.</li>
+<li><strong>Dependence on ST Electrophysiology</strong>:
+   - As proven by the Matrix B ablation benchmark (AUROC 0.53), non-ST features alone (PAT, HRV, pulse morphology) cannot reliably forecast intraoperative ischemia. ST segment Lead II inputs are required.</li>
+<li><strong>Single Lead II Scope</strong>:
+   - The model monitors Lead II. Purely anterior/lateral events manifesting exclusively in precordial leads (e.g. V5) without Lead II involvement are outside the single-lead inferential scope.</li>
+<li><strong>Motion Artifacts &amp; Electrocautery</strong>:
+   - High-noise intervals failing SQI must be rejected prior to inference.</li>
+</ol>
+<hr />
+<h2>7. Next Steps &amp; Deployment Readiness</h2>
+<ul>
+<li>The serialized model artifact (<code>models/beatahead_phase5_model.joblib</code>), schema (<code>models/feature_schema.json</code>), metadata (<code>models/model_metadata.json</code>), and manifest (<code>models/MODEL_MANIFEST.json</code>) are frozen and sealed.</li>
+<li>All code on the BeatAhead website remains 100% untouched.</li>
+<li>Staging and deployment integration will proceed only upon user authorization.</li>
+</ul>
+</body>
+</html>

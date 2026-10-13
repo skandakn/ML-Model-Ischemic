@@ -1,0 +1,320 @@
+caseid,age,htn,dm,cad,dur_h,dept,opname,dx
+5,66.0,1,0,False,5.98,General surgery,Aneurysmal repair,Aortic aneurysm 
+70,76.0,1,0,False,3.93,General surgery,Hemihepatectomy,Hepatocellular carcinoma 
+87,71.0,1,0,False,3.12,General surgery,Small bowel segmental resection,Incisional hernia 
+114,74.0,0,1,False,4.55,General surgery,Distal gastrectomy,Unspecified gastric cancer
+137,80.0,1,1,False,2.01,General surgery,Excision,Liposarcoma of retroperitoneum 
+232,87.0,1,0,False,3.91,General surgery,Exploratory laparotomy,Duodenal perforation
+238,75.0,1,0,False,3.38,General surgery,Anterior resection,"Colon cancer, sigmoid"
+243,81.0,1,0,False,2.96,General surgery,Hemicolectomy,"Colon cancer, transverse"
+263,74.0,1,0,False,2.68,General surgery,Gastric wedge resection,"Gastric submucosal tumor, unknown behavior"
+284,68.0,1,0,False,4.76,General surgery,Kidney transplantation,Chronic kidney disease
+286,67.0,1,0,False,3.62,General surgery,Liver segmentectomy,Metastatic cancer to the liver
+295,81.0,1,1,False,3.46,General surgery,Exploratory laparotomy,Undifferentiated pleomorphic sarcoma of pelvis 
+336,70.0,1,0,False,2.19,General surgery,Arteriovenous fistula,Atherosclerosis obliterans without gangrene
+355,75.0,1,1,False,2.82,General surgery,Exploratory laparotomy,Gastrointestinal stromal tumor 
+374,69.0,1,0,False,2.65,General surgery,Subtotal gastrectomy,Advanced gastric cancer 
+382,72.0,1,0,False,5.12,General surgery,Low anterior resection,Rectal cancer
+383,70.0,1,0,False,2.62,General surgery,Exploratory laparotomy,Liposarcoma
+403,65.0,1,0,False,2.18,General surgery,Total thyroidectomy,Thyroid nodule
+441,72.0,1,0,False,3.47,General surgery,Endarterectomy,Atherosclerosis obliterans without gangrene
+452,80.0,1,0,False,3.49,General surgery,Distal pancreatectomy,Pancreatic cancer
+525,76.0,1,0,False,5.27,General surgery,Low anterior resection,"Colon cancer, sigmoid"
+535,77.0,1,0,False,2.22,General surgery,Hernia repair,Direct inguinal hernia not specified as recurrent
+581,74.0,1,0,False,4.27,General surgery,Hemicolectomy,"Colon cancer, ascending"
+584,69.0,1,0,False,5.37,General surgery,Segmental resection of bile duct,Cholecystitis
+725,75.0,1,0,False,5.17,General surgery,Total thyroidectomy,Thyroid nodule
+755,66.0,0,1,False,2.47,General surgery,Subtotal colectomy,"Colon cancer, sigmoid"
+800,67.0,1,0,False,3.62,General surgery,Liver segmentectomy,Hepatocellular carcinoma 
+819,81.0,1,0,False,3.56,General surgery,Aortoiliac bypass,"Aneurysm, abdominal aorta"
+826,68.0,1,0,False,3.06,General surgery,Subtotal gastrectomy,Advanced gastric cancer
+830,77.0,1,1,False,3.38,General surgery,Anterior resection,"Colon cancer, sigmoid"
+917,74.0,1,0,False,4.44,General surgery,Exploratory laparotomy,Hemangiopericytoma
+965,76.0,1,0,False,2.22,General surgery,Hemicolectomy,"Colon cancer, ascending"
+966,71.0,1,0,False,2.75,General surgery,Transanal excision,Rectal cancer 
+979,86.0,0,1,False,2.64,General surgery,Exploratory laparotomy,Intestinal perforation 
+988,72.0,1,0,False,4.14,General surgery,Exploratory laparotomy,"Colon cancer, rectosigmoid"
+1001,69.0,1,0,False,2.6,General surgery,Endovascular aneurysmal repair,"Aneurysm, abdominal aorta"
+1021,84.0,1,0,False,2.75,General surgery,Hemicolectomy,"Colon cancer, ascending"
+1025,77.0,1,1,False,5.73,General surgery,Pylorus preserving pancreaticoduodenectomy,Common bile duct cancer
+1027,67.0,1,0,False,4.56,General surgery,Extended cholecystectomy,Gallbladder cancer
+1092,73.0,1,0,False,4.69,General surgery,Total gastrectomy,Advanced gastric cancer
+1112,78.0,1,0,False,2.13,General surgery,Ileocecectomy,Appendix mucocele
+1127,82.0,1,0,False,2.28,General surgery,Anterior resection,"Colon cancer, sigmoid"
+1129,77.0,1,0,False,4.15,General surgery,Cholecystectomy,Gallbladder adenomyoma
+1149,82.0,1,0,False,4.98,General surgery,Hemicolectomy,Cecal cancer
+1172,77.0,1,0,False,3.9,General surgery,Exploratory laparotomy,Enterocutaneous fistula 
+1188,83.0,1,0,False,4.05,General surgery,Total gastrectomy,Advanced gastric cancer
+1190,77.0,1,1,False,2.87,Thoracic surgery,Lung wedge resection,"Abnormal chest CT, lung nodule"
+1225,67.0,1,0,False,2.75,General surgery,Marsupialization,Cystic disease of liver
+1228,72.0,1,0,False,3.83,General surgery,Endarterectomy,Atherosclerosis obliteranswithout gangrene
+1232,76.0,1,1,False,2.1,General surgery,Anterior resection,"Colon cancer, sigmoid"
+1259,75.0,1,0,False,2.14,General surgery,Anterior resection,"Colon cancer, sigmoid"
+1293,81.0,1,0,False,3.19,General surgery,Hepatic hilar resection,Gallbladder cancer 
+1307,74.0,1,0,False,5.17,General surgery,Hemihepatectomy,Hepatocellular carcinoma
+1318,68.0,1,0,False,2.07,General surgery,Low anterior resection,Rectal cancer
+1320,70.0,1,1,False,3.57,General surgery,Exploratory laparotomy,Acute peritonitis
+1332,76.0,1,0,False,2.97,General surgery,Total thyroidectomy,Thyroid nodule 
+1358,83.0,1,0,False,2.42,General surgery,Anterior resection,"Colon cancer, sigmoid"
+1367,75.0,1,0,False,3.82,General surgery,subtotal colectomy,Colon cancer 
+1377,79.0,1,0,False,2.12,General surgery,Incisional hernia repair,Colon cancer
+1378,75.0,0,1,False,3.88,General surgery,Hemicolectomy,"Colon cancer, ascending"
+1379,67.0,1,0,False,4.07,General surgery,Anterior resection,"Colon cancer, rectosigmoid"
+1416,82.0,1,1,False,3.56,General surgery,Liver sectionectomy,colon cancer 
+1428,76.0,0,1,False,4.18,General surgery,Liver sectionectomy,Metastatic cancer to the liver 
+1457,73.0,1,0,False,2.68,General surgery,Inguinal lymph node dissection,Malignant melanoma
+1461,73.0,1,0,False,2.27,General surgery,Hemicolectomy,"Colon cancer, ascending"
+1464,79.0,1,0,False,4.07,General surgery,Distal gastrectomy,Early gastric cancer
+1480,65.0,1,0,False,4.53,General surgery,Excision,Unspecified mass (localized swelling)
+1494,68.0,1,0,False,3.21,General surgery,Low anterior resection,Rectal cancer
+1497,66.0,1,1,False,4.27,Thoracic surgery,Lung lobectomy,Lung cancer left
+1499,89.0,1,0,False,2.25,General surgery,Anterior resection,"Colon cancer, sigmoid"
+1558,84.0,1,1,False,4.74,General surgery,Exploratory laparotomy,Sarcoma
+1567,68.0,1,0,False,2.67,General surgery,Ileostomy repair,Rectal cancer 
+1568,79.0,1,1,False,2.87,General surgery,subtotal colectomy,Colitis
+1584,75.0,1,0,False,2.49,General surgery,Cholecystectomy,Gallbladder stone
+1589,66.0,1,0,False,3.62,General surgery,Small bowel segmental resection,Jejunal cancer
+1619,76.0,1,0,False,2.04,General surgery,Cholecystectomy,Acute cholecystitis
+1625,74.0,1,1,False,3.41,General surgery,Low anterior resection,"Colon cancer, sigmoid"
+1630,76.0,1,0,False,4.32,General surgery,Resection of popliteal artery,"Aneurysm, popliteal artery"
+1659,70.0,1,0,False,2.06,General surgery,Anterior resection,"Colon cancer, rectosigmoid"
+1688,69.0,1,0,False,2.65,General surgery,Spleen preserving distal pancreatectomy,"Intraductal papillary mucinous neoplasm of pancreas, benign"
+1699,66.0,1,0,False,3.33,General surgery,Liver segmentectomy,Hepatocellular carcinoma
+1706,84.0,1,0,False,4.95,General surgery,Exploration of common bile duct,Acute cholangitis
+1709,68.0,1,0,False,2.17,General surgery,Hemicolectomy,"Colon cancer, ascending"
+1716,71.0,1,0,False,4.44,General surgery,Kidney transplantation,End stage renal disease
+1753,72.0,0,1,False,2.23,General surgery,Ileostomy repair,Rectal cancer
+1758,79.0,1,0,False,2.62,General surgery,Ligation and stripping,Varicose vein of lower limb
+1804,73.0,1,1,False,4.13,General surgery,Endarterectomy,"Atherosclerosis obliterans, limb"
+1815,73.0,1,1,False,3.16,General surgery,Hemicolectomy,"Colon cancer, ascending"
+1828,73.0,1,0,False,2.44,General surgery,Ligation and stripping,Varicose vein of lower limb
+1852,73.0,1,0,False,3.65,General surgery,Liver sectionectomy,Hepatocellular carcinoma 
+1871,68.0,1,0,False,2.62,General surgery,Total mastectomy,Breast cancer left
+1886,89.0,1,0,False,3.01,General surgery,Closure of wound,Surgical wound dehiscence
+1896,65.0,1,0,False,5.7,General surgery,Kidney transplantation,End stage renal disease
+1901,69.0,1,0,False,4.7,General surgery,Distal pancreatectomy,Malignant neoplasm of pancreas tail
+1929,69.0,1,1,False,2.46,General surgery,Breast-conserving surgery,Ductal carcinoma in situ of breast right
+1944,75.0,1,0,False,4.79,General surgery,Hemihepatectomy,Hepatocellular carcinoma
+1960,69.0,1,1,False,5.86,General surgery,Total gastrectomy,Stomach cancer advanced
+1973,70.0,1,1,False,5.21,General surgery,Hemihepatectomy,Hepatocellular carcinoma
+2003,70.0,1,1,False,2.26,General surgery,Hemicolectomy,"Colon cancer, ascending"
+2045,67.0,1,0,False,2.49,General surgery,Hartmann procedure,Ovarian cancer
+2063,68.0,1,0,False,3.27,General surgery,Exploratory laparotomy,Adhesive ileus
+2076,68.0,1,0,False,2.06,General surgery,Anterior resection,"Colon cancer, rectosigmoid"
+2094,71.0,1,0,False,3.45,General surgery,Ultralow anterior resection,Rectal cancer 
+2104,75.0,0,1,False,2.52,General surgery,Anterior resection,Colon cancer
+2105,72.0,1,0,False,2.31,General surgery,Low anterior resection,Rectal cancer
+2109,85.0,1,0,False,4.28,General surgery,Incisional hernia repair,Incisional hernia
+2174,65.0,1,0,False,2.15,General surgery,Bleeding control,End stage renal disease 
+2189,71.0,1,0,False,2.25,General surgery,Excision,Neck mass
+2190,75.0,1,1,False,2.58,General surgery,Anterior resection,"Colon cancer, sigmoid"
+2243,69.0,0,1,False,4.65,General surgery,Distal pancreatectomy,"Intraductal papillary mucinous neoplasm of pancreas, invasive"
+2248,83.0,1,0,False,2.77,General surgery,Anterior resection,"Colon cancer, descending"
+2265,66.0,1,0,False,2.67,General surgery,Excision,Malignant neoplasm of retroperitoneum
+2296,66.0,1,0,False,4.05,General surgery,Liver segmentectomy,hepatocellular carcinoma 
+2307,75.0,1,0,False,5.01,General surgery,Hepatic hilar resection,Klatskin tumor
+2311,72.0,0,1,False,5.06,Thoracic surgery,Pneumonectomy,Lung cancer left
+2325,69.0,1,0,False,5.35,General surgery,Kidney transplantation,End stage renal disease
+2353,79.0,1,0,False,4.62,General surgery,Partial pancreatectomy,Pancreatic cancer
+2372,67.0,1,0,False,2.97,General surgery,Low anterior resection,"Colon cancer, sigmoid"
+2378,72.0,1,0,False,3.47,General surgery,Hemicolectomy,"Colon cancer, hepatic flexure"
+2385,67.0,0,1,False,3.61,General surgery,Pylorus preserving gastrectomy,Early gastric cancer 
+2395,72.0,1,1,False,3.47,General surgery,Revision of arteriovenous fistula,Arteriovenous fistula malfunction
+2416,78.0,1,0,False,4.28,General surgery,Extended cholecystectomy,Gallbladder polyp
+2445,68.0,1,0,False,5.02,General surgery,Pylorus preserving gastrectomy,Early gastric cancer
+2447,88.0,1,0,False,4.8,General surgery,Embolectomy,"Embolism and thrombosis, femoral artery"
+2448,75.0,1,0,False,3.71,General surgery,Hemicolectomy,"Colon cancer, ascending"
+2449,70.0,1,0,False,2.34,General surgery,Hemicolectomy,"Colon cancer, transverse"
+2456,74.0,1,0,False,2.1,General surgery,Anterior resection,"Colon cancer, sigmoid"
+2491,66.0,1,0,False,2.62,General surgery,Extended hemicolectomy,"Colon cancer, transverse"
+2495,73.0,1,0,False,5.17,General surgery,Paraaortic lymph node dissection,"Colon cancer, sigmoid"
+2508,74.0,1,0,False,4.87,General surgery,Hemihepatectomy,"Cholangiocarcinoma, intrahepatic"
+2531,67.0,1,0,False,2.43,General surgery,Hemicolectomy,"Colon cancer, ascending"
+2540,69.0,1,0,False,2.29,General surgery,Low anterior resection,Rectal cancer 
+2588,80.0,1,0,False,2.8,General surgery,Hemicolectomy,Colon cancer
+2611,72.0,1,0,False,4.66,General surgery,Exploratory laparotomy,Intestinal perforation
+2617,73.0,1,1,False,4.28,General surgery,Anterior resection,Anal bleeding
+2648,78.0,1,0,False,5.24,General surgery,Hemihepatectomy,"Colon cancer, sigmoid"
+2650,74.0,1,0,False,2.13,General surgery,Ligation and stripping,Varicose vein of lower limb
+2661,65.0,1,0,False,2.36,General surgery,Total thyroidectomy,Thyroid nodule 
+2685,66.0,1,0,False,3.44,General surgery,Distal pancreatectomy,Pancreatic tail cancer 
+2735,79.0,1,0,False,2.81,General surgery,Hemihepatectomy,Hepatocellular carcinoma
+2741,80.0,1,0,False,4.71,General surgery,Distal gastrectomy,Advanced gastric cancer 
+2773,65.0,1,0,False,3.81,General surgery,Hemicolectomy,Colon cancer
+2793,83.0,1,0,False,2.18,General surgery,Appendectomy,Acute appendicitis
+2839,76.0,1,1,False,2.01,General surgery,Paraaortic lymph node dissection,"Colon cancer, rectosigmoid"
+2850,73.0,1,0,False,3.97,General surgery,Hemihepatectomy,Klatskin tumor
+2851,66.0,1,0,False,3.73,General surgery,Debulking surgery,Pseudomyxoma peritonei
+2858,69.0,1,1,False,5.71,General surgery,Enucleation of pancreas,"Neuroendocrine tumor of pancreas, G1"
+2878,72.0,1,0,False,2.09,General surgery,Transverse colectomy,"Colon cancer, transverse"
+2886,79.0,1,0,False,2.8,General surgery,Anterior resection,"Colon cancer, sigmoid"
+2890,67.0,0,1,False,2.74,General surgery,Distal pancreatectomy,Pancreatic cancer 
+2920,80.0,1,1,False,3.26,General surgery,Cholecystectomy,Gallbladder stone with cholecystitis without obstruction
+2930,66.0,0,1,False,3.36,General surgery,Anterior resection,"Colon cancer, sigmoid"
+2934,77.0,1,0,False,3.21,General surgery,Anterior resection,"Colon cancer, sigmoid"
+2949,76.0,1,0,False,3.79,General surgery,Liver sectionectomy,Hepatocellular carcinoma 
+2950,74.0,1,0,False,2.24,General surgery,Anterior resection,"Colon cancer, rectosigmoid"
+2976,68.0,1,0,False,5.56,General surgery,Total gastrectomy,Early gastric cancer
+2983,74.0,1,0,False,2.85,General surgery,Adhesiolysis,Ileus
+3000,88.0,1,0,False,2.67,General surgery,Liver segmentectomy,Hepatocellular carcinoma 
+3022,69.0,1,0,False,5.53,General surgery,Anterior resection,"Colon cancer, sigmoid"
+3029,68.0,1,1,False,2.54,General surgery,Anterior resection,"Colon cancer, rectosigmoid"
+3044,68.0,1,1,False,5.83,General surgery,Pylorus preserving pancreaticoduodenectomy,Common bile duct cancer
+3053,67.0,1,0,False,4.62,General surgery,Anterior resection,Rectal cancer
+3062,74.0,1,0,False,3.12,General surgery,Anterior resection,"Colon cancer, sigmoid"
+3098,67.0,1,0,False,4.22,General surgery,Liver segmentectomy,Hepatocellular carcinoma
+3101,22.0,0,0,True,2.69,General surgery,Nephrectomy,Cadaveric donor 
+3125,76.0,1,0,False,4.82,General surgery,Distal gastrectomy,Early gastric cancer
+3143,68.0,1,0,False,2.07,General surgery,Thyroid lobectomy,Thyroid nodule 
+3157,71.0,1,0,False,3.81,General surgery,Embolectomy,"Aneurysm, abdominal aorta"
+3164,83.0,1,0,False,4.47,General surgery,Distal gastrectomy,Early gastric cancer 
+3189,78.0,1,0,False,4.51,General surgery,Hemicolectomy,"Colon cancer, hepatic flexure"
+3209,73.0,1,0,False,4.58,General surgery,Exploratory laparotomy,"Colon cancer, sigmoid"
+3220,70.0,1,1,False,5.93,General surgery,Distal gastrectomy,Early gastric cancer 
+3227,69.0,1,0,False,3.16,General surgery,Low anterior resection,"Colon cancer, rectosigmoid"
+3241,78.0,1,1,False,2.39,General surgery,Axillary lymph node dissection,Lymphadenopathy
+3246,73.0,1,0,False,4.13,General surgery,Distal gastrectomy,Unspecified gastric cancer 
+3283,67.0,1,0,False,2.46,General surgery,Anterior resection,Colorectal cancer
+3316,70.0,1,0,False,2.13,General surgery,Low anterior resection,"Colon cancer, sigmoid"
+3328,67.0,0,1,False,3.96,General surgery,Exploratory laparotomy,Liposarcoma
+3343,65.0,1,1,False,2.28,General surgery,Hemicolectomy,Colon cancer
+3372,75.0,1,0,False,3.29,General surgery,Distal pancreatectomy,Malignant neoplasm of pancreas
+3417,73.0,1,0,False,4.49,General surgery,Cholecystectomy,Xanthogranulomatous cholecystitis
+3428,71.0,1,0,False,4.22,General surgery,Pylorus preserving pancreaticoduodenectomy,Neuroendocrine carcinoma of pancreas
+3431,68.0,1,1,False,3.89,General surgery,Hemicolectomy,Colonic polyp 
+3458,65.0,1,0,False,2.92,General surgery,Liver tumorectomy,Hepatocellular carcinoma 
+3466,72.0,0,1,False,3.2,General surgery,Ligation and stripping,Varicose vein of lower limb
+3477,69.0,1,0,False,3.14,General surgery,Hemicolectomy,Cecal cancer
+3484,70.0,1,0,False,2.36,General surgery,Thyroid lobectomy,Thyroid nodule 
+3527,82.0,1,0,False,3.53,General surgery,Bleeding control,Hepatocellular carcinoma
+3532,75.0,1,0,False,2.6,General surgery,Salpingo-oophorectomy,Krukenberg tumor unspecified side
+3550,76.0,1,0,False,5.85,General surgery,Pancreaticoduodenectomy,"Common bile duct cancer, middle"
+3566,67.0,1,0,False,5.3,General surgery,Liver sectionectomy,Hepatocellular carcinoma
+3569,78.0,1,0,False,2.12,General surgery,Exploratory laparotomy,Pancreatic disease 
+3571,65.0,1,0,False,4.56,General surgery,Segmental resection of bile duct,Klatskin tumor
+3578,70.0,1,0,False,3.19,General surgery,Hepatic hilar resection,Klatskin tumor
+3579,77.0,1,0,False,2.69,General surgery,Remnant total gastrectomy,Advanced gastric cancer
+3597,66.0,0,1,False,2.58,General surgery,Cecectomy,Appendix mucocele
+3609,72.0,0,1,False,2.54,General surgery,Hemicolectomy,"Colon cancer, ascending"
+3641,69.0,1,1,False,2.02,General surgery,Hemicolectomy,"Colon cancer, ascending"
+3661,67.0,1,0,False,2.04,General surgery,Ileostomy repair,"Colon cancer, rectosigmoid"
+3666,73.0,1,0,False,3.79,General surgery,Endovascular aneurysmal repair,"Aneurysm, abdominal aorta"
+3670,74.0,1,0,False,2.33,General surgery,Hartmann procedure,"Colon cancer, sigmoid"
+3686,77.0,1,0,False,5.05,General surgery,Segmental resection of bile duct,Common bile duct cancer
+3695,74.0,1,1,False,3.8,General surgery,Anterior resection,"Colon cancer, sigmoid"
+3710,65.0,0,1,False,5.61,General surgery,Kidney transplantation,End stage renal disease
+3714,75.0,1,0,False,2.71,General surgery,Appendectomy,Acute appendicitis
+3724,80.0,1,1,False,2.57,General surgery,Hemicolectomy,"Colon cancer, ascending"
+3737,70.0,1,1,False,4.96,General surgery,Subtotal gastrectomy,Advanced gastric cancer 
+3761,77.0,1,0,False,2.59,General surgery,Anterior resection,"Colon cancer, sigmoid"
+3808,76.0,1,0,False,2.25,General surgery,Low anterior resection,Rectal cancer
+3829,80.0,1,0,False,2.05,General surgery,Rrectocele repair,"Rectocele, female"
+3869,75.0,1,0,False,3.04,General surgery,Ligation and stripping,Carotid artery stenosis
+3874,66.0,1,0,False,2.85,General surgery,Ultralow anterior resection,Rectal cancer
+3876,76.0,1,0,False,5.25,General surgery,Total gastrectomy,Advanced gastric cancer
+3879,74.0,1,0,False,4.33,General surgery,Exploratory laparotomy,Advanced gastric cancer
+3909,76.0,1,0,False,2.09,General surgery,Cholecystectomy,Acute cholecystitis
+3918,71.0,1,1,False,3.79,General surgery,Anterior resection,Colon cancer 
+3927,66.0,0,1,False,3.07,General surgery,Excision,Gastrointestinal stromal tumor of small intestine
+3943,66.0,1,0,False,2.36,General surgery,Anterior resection,"Colon cancer, sigmoid"
+3989,65.0,1,0,False,5.02,General surgery,Kidney transplantation,End stage renal disease
+4021,72.0,1,0,False,3.72,General surgery,Liver sectionectomy,Hepatocellular carcinoma 
+4031,79.0,1,0,False,2.68,General surgery,Small bowel segmental resection,Gastrointestinal hemorrhage
+4036,77.0,1,0,False,4.24,General surgery,Excision,Metastatic cancer to the abdominal cavity
+4061,78.0,1,0,False,4.62,General surgery,Distal gastrectomy,Early gastric cancer
+4102,69.0,1,0,False,2.21,General surgery,Thyroid lobectomy,Thyroid disease
+4110,69.0,1,0,False,2.13,General surgery,Ileocecectomy,Appendix mucocele 
+4153,70.0,1,0,False,2.65,General surgery,Breast-conserving surgery,Breast cancer unspecified side
+4158,85.0,1,0,False,3.72,General surgery,Anterior resection,Colon cancer
+4167,70.0,1,0,False,5.45,General surgery,Endarterectomy,"Atherosclerosis obliterans, limb"
+4186,73.0,1,0,False,2.84,General surgery,Oophorectomy,Krukenberg tumor right
+4207,72.0,1,0,False,4.87,General surgery,Pylorus preserving pancreaticoduodenectomy,"Common bile duct cancer, distal"
+4218,73.0,1,0,False,2.0,General surgery,Simple mastectomy,Infiltrating ductal carcinoma of breast right
+4270,73.0,1,0,False,3.34,Urology,Radical prostatectomy,Prostate cancer 
+4297,75.0,1,0,False,4.88,General surgery,Distal gastrectomy,Early gastric cancer
+4308,75.0,1,0,False,2.14,General surgery,Cholecystectomy,Symptomatic gallbladder stone with obstruction
+4320,79.0,0,1,False,5.21,General surgery,Pancreaticoduodenectomy,Pancreatic cancer
+4333,80.0,1,0,False,3.4,General surgery,Total colectomy,Pseudomyxoma peritonei
+4336,70.0,1,1,False,5.47,General surgery,Distal gastrectomy,Unspecified gastric cancer 
+4362,74.0,0,1,False,3.1,General surgery,Distal pancreatectomy,"Intraductal papillary mucinous neoplasm of pancreas, high grade dysplasia"
+4447,77.0,1,1,False,2.0,General surgery,Transanal endoscopic microsurgery,Rectal cancer
+4458,88.0,1,0,False,2.23,General surgery,Hemicolectomy,"Colon cancer, descending"
+4522,72.0,1,0,False,2.53,General surgery,Debulking surgery,Cecal cancer 
+4626,68.0,1,0,False,4.31,General surgery,Hartmann procedure,Colon cancer
+4658,69.0,1,1,False,3.62,General surgery,Distal pancreatectomy,Pancreatic cancer 
+4698,77.0,1,1,False,2.13,General surgery,Cholecystectomy,Gallbladder stone without obstruction
+4718,72.0,1,0,False,2.69,General surgery,Exploratory laparotomy,Liposarcoma
+4729,65.0,1,0,False,4.08,General surgery,Anterior resection,Constipation
+4739,50.0,1,0,True,3.57,Thoracic surgery,Excision,Coronary atherosclerosis
+4762,78.0,1,0,False,3.08,General surgery,Total thyroidectomy,Thyroid cancer
+4780,77.0,1,0,False,4.03,General surgery,Extended cholecystectomy,Gallbladder cancer
+4783,74.0,1,0,False,4.62,General surgery,Hemicolectomy,Colon cancer
+4818,68.0,1,0,False,2.28,General surgery,Exploratory laparotomy,Postoperative ileus
+4829,72.0,1,1,False,2.79,General surgery,Hernia repair,Rectal cancer
+4858,66.0,0,1,False,3.46,General surgery,Extended cholecystectomy,Gallbladder cancer
+4880,66.0,1,0,False,4.22,General surgery,Subtotal gastrectomy,Early gastric cancer
+4888,73.0,1,0,False,2.22,General surgery,Anterior resection,"Colon cancer, rectosigmoid"
+4926,74.0,1,0,False,4.12,General surgery,Distal gastrectomy,Advanced gastric cancer 
+4943,72.0,1,0,False,2.86,General surgery,Hemicolectomy,"Colon cancer, ascending"
+5010,77.0,1,0,False,5.62,General surgery,Pylorus preserving pancreaticoduodenectomy,"Intraductal papillary mucinous neoplasm of pancreas, borderline"
+5017,82.0,1,0,False,2.48,General surgery,Transanal endoscopic microsurgery,Neuroendocrine carcinoma 
+5020,70.0,1,0,False,2.98,General surgery,Hemicolectomy,"Colon cancer, ascending"
+5032,73.0,0,1,False,2.78,General surgery,Low anterior resection,Rectal cancer
+5035,75.0,1,0,False,5.37,General surgery,Endovascular aneurysmal repair,"Aneurysm, iliac artery"
+5036,73.0,1,0,False,5.82,General surgery,Pancreas transplantation,Pancreatic disease 
+5041,77.0,0,1,False,4.71,General surgery,Low anterior resection,Rectal cancer 
+5153,65.0,1,1,False,5.94,General surgery,Pylorus preserving pancreaticoduodenectomy,"Solid pseudopapillary tumor of pancreas, malignant"
+5154,81.0,1,0,False,2.15,General surgery,Cholecystectomy,Acute cholecystitis
+5162,73.0,1,0,False,5.24,General surgery,Hepatic hilar resection,Common bile duct cancer
+5178,69.0,1,0,False,3.82,General surgery,Ligation and stripping,Varicose vein of lower limb 
+5197,65.0,1,0,False,2.41,General surgery,Excision,Malignant melanoma of thumb
+5199,68.0,0,1,False,4.32,General surgery,Total gastrectomy,Advanced gastric cancer
+5217,72.0,1,1,False,2.88,General surgery,Exploratory laparotomy,"Colon cancer, sigmoid"
+5278,68.0,1,0,False,4.05,General surgery,Liver segmentectomy,Metastatic cancer to the liver
+5285,77.0,1,0,False,3.16,Thoracic surgery,Lung wedge resection,Squamous cell carcinoma of lung right
+5293,80.0,1,0,False,2.29,General surgery,Hemicolectomy,"Colon cancer, ascending"
+5296,70.0,1,1,False,2.33,General surgery,Liver sectionectomy,Intrahepatic duct stone with obstruction
+5297,73.0,1,0,False,2.8,General surgery,Colostomy repair,Colostomy status
+5333,80.0,1,0,False,4.67,General surgery,Cholecystectomy,Acute cholecystitis
+5335,78.0,1,0,False,4.72,General surgery,Low anterior resection,Colorectal cancer 
+5351,68.0,1,1,False,5.12,General surgery,Distal gastrectomy,Stomach cancer unspecified
+5404,76.0,1,0,False,3.75,General surgery,Endovascular aneurysmal repair,"Aneurysm, abdominal aorta"
+5408,70.0,0,1,False,5.52,General surgery,Partial pancreatectomy,Islet cell adenoma
+5420,76.0,1,1,False,3.46,General surgery,Excision,Duodenal cancer
+5437,81.0,1,0,False,2.12,General surgery,Cholecystectomy,Acute cholecystitis
+5465,73.0,1,0,False,3.66,General surgery,Hartmann procedure,Colon perforation
+5467,73.0,1,1,False,4.36,General surgery,Hemihepatectomy,Metastatic cancer to the liver
+5519,75.0,1,0,False,4.1,General surgery,Distal pancreatectomy,Pancreatic disease
+5540,71.0,1,0,False,2.86,General surgery,Anterior resection,"Colon cancer, rectosigmoid"
+5546,70.0,1,0,False,2.37,General surgery,Debulking surgery,"Gastrointestinal stromal tumor of small intestine, malignant"
+5556,74.0,1,0,False,2.12,General surgery,Exploratory laparotomy,Colon cancer
+5583,67.0,1,0,False,2.95,General surgery,Parathyroidectomy,Primary hyperparathyroidism
+5614,81.0,1,0,False,2.75,General surgery,Exploratory laparotomy,Rectal cancer
+5628,76.0,1,1,False,2.08,General surgery,Hemicolectomy,"Colon cancer, ascending"
+5658,81.0,1,0,False,2.89,General surgery,Anterior resection,"Colon cancer, sigmoid"
+5695,69.0,1,0,False,3.48,General surgery,Total thyroidectomy,Thyroid nodule 
+5696,68.0,1,1,False,2.17,General surgery,Ligation and stripping,Varicose vein of lower limb
+5769,77.0,1,0,False,4.49,General surgery,Pylorus preserving pancreaticoduodenectomy,Common bile duct cancer 
+5946,69.0,1,1,False,5.04,General surgery,Liver segmentectomy,Hepatocellular carcinoma
+5981,86.0,1,0,False,4.38,General surgery,Resection of lower limb artery,"Embolism and thrombosis, iliac artery"
+6051,66.0,1,0,False,2.2,General surgery,Anterior resection,"Colon cancer, rectosigmoid"
+6059,69.0,1,1,False,5.08,General surgery,Ultralow anterior resection,Rectal cancer
+6063,79.0,1,0,False,4.34,General surgery,Hartmann procedure,Panperitonitis
+6078,78.0,1,0,False,3.87,General surgery,Distal gastrectomy,Early gastric cancer
+6090,72.0,1,1,False,5.43,General surgery,Total gastrectomy,"Neuroendocrine tumor of duodenum, G1"
+6107,68.0,1,0,False,2.44,General surgery,Distal pancreatectomy,Pancreatic cyst
+6112,82.0,1,0,False,5.33,General surgery,Anterior resection,"Colon cancer, rectosigmoid"
+6122,77.0,1,0,False,4.52,General surgery,Distal gastrectomy,Early gastric cancer 
+6133,73.0,1,0,False,3.09,General surgery,Anterior resection,"Colon cancer, sigmoid"
+6161,77.0,1,0,False,4.41,General surgery,Subtotal gastrectomy,Advanced gastric cancer
+6163,77.0,1,0,False,3.27,General surgery,Hemihepatectomy,Hepatocellular carcinoma
+6181,86.0,1,0,False,4.47,General surgery,Anterior resection,Colon cancer
+6184,76.0,1,0,False,4.25,General surgery,Hemicolectomy,Colonic polyp
+6185,76.0,0,1,False,3.96,General surgery,Endarterectomy,"Atherosclerosis obliterans, limb"
+6232,77.0,1,0,False,3.14,General surgery,Anterior resection,"Colon cancer, sigmoid"
+6264,65.0,1,0,False,4.91,General surgery,Liver segmentectomy,Hepatocellular carcinoma
+6275,73.0,1,0,False,5.49,General surgery,Exploratory laparotomy,Liposarcoma 
+6321,68.0,1,1,False,2.29,General surgery,Rectal prolapse operation,Rectal prolapse
+6335,70.0,1,0,False,2.84,General surgery,Hemihepatectomy,Hepatocellular carcinoma
+6355,72.0,1,1,False,3.76,General surgery,Partial pancreatectomy,"Intraductal papillary mucinous neoplasm of pancreas, benign"
+6368,72.0,1,0,False,5.2,General surgery,Pylorus preserving pancreaticoduodenectomy,Common bile duct cancer

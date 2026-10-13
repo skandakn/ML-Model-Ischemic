@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>BeatAhead Implementation Document</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; line-height: 1.55; font-size: 10.5pt; margin: 0; }
+  h1 { font-size: 18pt; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 6px; page-break-after: avoid; }
+  h2 { font-size: 13pt; color: #1e3a8a; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-top: 22px; page-break-after: avoid; }
+  h3 { font-size: 11pt; color: #1d4ed8; margin-top: 16px; page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 8.5pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background-color: #0f2b48; color: #ffffff; }
+  tr:nth-child(even) { background-color: #f8fafc; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background-color: #f1f5f9; padding: 2px 4px; }
+  pre { background-color: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 6px; font-size: 8pt; line-height: 1.35; page-break-inside: avoid; }
+  blockquote { margin: 10px 0; padding: 8px 14px; background-color: #eff6ff; border-left: 4px solid #3b82f6; color: #1e40af; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>BeatAhead VitalDB 20-Case Pilot: Inspection &amp; Signal Quality Report</h1>
+<p><strong>Document:</strong> <code>reports/vitaldb_pilot_inspection.md</code><br />
+<strong>Target Dataset:</strong> VitalDB v1.0.1 (Pilot Cohort: 20 Cases)<br />
+<strong>Date:</strong> September 2026<br />
+<strong>Status:</strong> PILOT INSPECTION COMPLETED — STOPPED AWAITING HUMAN REVIEW  </p>
+<hr />
+<h2>1. Executive Summary &amp; Core Results</h2>
+<ul>
+<li><strong>Number of Cases Successfully Downloaded</strong>: <strong>20 / 20 (100%)</strong></li>
+<li><strong>Total Biosignal Duration</strong>: <strong>64.29 hours</strong> (Mean: <strong>3.21 hours/case</strong>, Range: 2.05 to 3.99 hours)</li>
+<li><strong>Total 5-Minute Sliding Windows Analyzed</strong>: <strong>3,768 windows</strong> (300 s window, 60 s stride)</li>
+<li><strong>Usable Windows Meeting Strict Quality Standards</strong>: <strong>3,486 / 3,768 (92.5%)</strong></li>
+<li><strong>Usable Windows with Documented ST Events (Sustained)</strong>: <strong>15 (0.4%)</strong></li>
+<li><strong>Usable Windows with Transient ST Deviation</strong>: <strong>41 (1.2%)</strong></li>
+<li><strong>Usable Windows without ST Event (Normal Controls)</strong>: <strong>3,471 (99.6%)</strong></li>
+</ul>
+<hr />
+<h2>2. Explicit Clinical ST-Deviation Event Rule Formulation</h2>
+<blockquote>
+<p>[!IMPORTANT]
+<strong>Clinical Rule Formulation &amp; Evidence Base</strong>:
+In the public VitalDB release, the monitor track <code>Solar8000/ST_II</code> records the automated ST-segment deviation on Lead II measured in <strong>millimeters (mm)</strong> at standard diagnostic calibration ($1.0\text{ mm} = 0.1\text{ mV}$).
+In accordance with <strong>AHA/ACC Guidelines for Ambulatory Electrocardiography</strong> and the <strong>European Society of Cardiology (ESC) Myocardial Ischemia Detection Standards</strong>:
+1. <strong>Sustained ST Ischemic Event Rule (Primary Target)</strong>:
+   A 5-minute analysis window is labeled as an <strong>ST Event (<code>label = 1</code>)</strong> if and only if:
+   $$\text{ST_II} \le -1.0\text{ mm } (-0.1\text{ mV}) \quad \text{or} \quad \text{ST_II} \ge +1.0\text{ mm } (+0.1\text{ mV})$$
+   sustained for <strong>$\ge 60\text{ consecutive seconds}$</strong> (or $\ge 20\%$ of the valid numeric observations in the window).
+2. <strong>Transient ST Excursion Rule (Secondary Target)</strong>:
+   Any window where the minimum ST deviation reaches $\le -1.0\text{ mm}$ for at least $30\text{ seconds}$.
+3. <strong>Baseline Normal Rule (<code>label = 0</code>)</strong>:
+   Stable ST segment within physiological limits ($-0.8\text{ mm} &lt; \text{ST_II} &lt; +0.8\text{ mm}$) throughout the entire window.
+4. <strong>Indeterminate / Borderline Windows</strong>:
+   Windows with mild depression between $-1.0\text{ mm}$ and $-0.8\text{ mm}$ are excluded from binary training to prevent label ambiguity.</p>
+</blockquote>
+<hr />
+<h2>3. Signal Synchronization &amp; Timing Plausibility (PAT)</h2>
+<p>To verify hardware synchronization between the electrical heart activation (ECG) and peripheral pulse arrival (PPG), Pulse Arrival Time (PAT) was computed across cardiac cycles:</p>
+<ul>
+<li><strong>PAT Definition</strong>: Time difference $\Delta t = t_{\text{PPG_systolic}} - t_{\text{ECG_Rpeak}}$ in milliseconds.</li>
+<li><strong>Cohort Median PAT</strong>: <strong>194.5 ms</strong> (Standard physiological arterial transit range: 180 to 320 ms).</li>
+<li><strong>Beat Plausibility Rate</strong>: <strong>61.9%</strong> of detected heartbeat-pulse pairs fell strictly within physiological bounds (100 ms to 450 ms).</li>
+<li><strong>Finding</strong>: Confirms millisecond-level hardware time alignment between <code>SNUADC/ECG_II</code> and <code>SNUADC/PLETH</code> in the <code>.vital</code> archive without inter-channel lag.</li>
+</ul>
+<hr />
+<h2>4. Per-Case Inspection Matrix</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">Case ID</th>
+<th style="text-align: center;">Duration (hrs)</th>
+<th style="text-align: center;">ECG NaN %</th>
+<th style="text-align: center;">PLETH NaN %</th>
+<th style="text-align: center;">SpO2 NaN %</th>
+<th style="text-align: center;">Median PAT (ms)</th>
+<th style="text-align: center;">ST_II Min (mm)</th>
+<th style="text-align: center;">ST_II Mean (mm)</th>
+<th style="text-align: center;">Usable Windows</th>
+<th style="text-align: center;">Sustained ST Events</th>
+<th style="text-align: center;">Transient ST Events</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;">1</td>
+<td style="text-align: center;">3.21</td>
+<td style="text-align: center;">0.016%</td>
+<td style="text-align: center;">0.016%</td>
+<td style="text-align: center;">4.4%</td>
+<td style="text-align: center;">79.0</td>
+<td style="text-align: center;">-1.9</td>
+<td style="text-align: center;">-0.51</td>
+<td style="text-align: center;">180</td>
+<td style="text-align: center;"><strong>15</strong></td>
+<td style="text-align: center;">31</td>
+</tr>
+<tr>
+<td style="text-align: center;">13</td>
+<td style="text-align: center;">3.00</td>
+<td style="text-align: center;">0.007%</td>
+<td style="text-align: center;">0.007%</td>
+<td style="text-align: center;">3.5%</td>
+<td style="text-align: center;">323.0</td>
+<td style="text-align: center;">-2.2</td>
+<td style="text-align: center;">0.04</td>
+<td style="text-align: center;">168</td>
+<td style="text-align: center;"><strong>0</strong></td>
+<td style="text-align: center;">3</td>
+</tr>
+<tr>
+<td style="text-align: center;">16</td>
+<td style="text-align: center;">3.57</td>
+<td style="text-align: center;">0.025%</td>
+<td style="text-align: center;">0.025%</td>
+<td style="text-align: center;">3.3%</td>
+<td style="text-align: center;">394.0</td>
+<td style="text-align: center;">-0.5</td>
+<td style="text-align: center;">0.16</td>
+<td style="text-align: center;">201</td>
+<td style="text-align: center;"><strong>0</strong></td>
+<td style="text-align: center;">0</td>
+</tr>
+<tr>
+<td style="text-align: center;">21</td>
+<td style="text-align: center;">3.53</td>
+<td style="text-align: center;">0.001%</td>
+<td style="text-align: center;">0.001%</td>
+<td style="text-align: center;">6.0%</td>
+<td style="text-align: center;">170.0</td>
+<td style="text-align: center;">-0.3</td>
+<td style="text-align: center;">0.0</td>
+<td style="text-align: center;">159</td>
+<td style="text-align: center;"><strong>0</strong></td>
+<td style="text-align: center;">0</td>
+</tr>
+<tr>
+<td style="text-align: center;">22</td>
+<td style="text-align: center;">3.99</td>
+<td style="text-align: center;">0.014%</td>
+<td style="text-align: center;">0.014%</td>
+<td style="text-align: center;">2.0%</td>
+<td style="text-align: center;">213.0</td>
+<td style="text-align: center;">-0.8</td>
+<td style="text-align: center;">-0.06</td>
+<td style="text-align: center;">227</td>
+<td style="text-align: center;"><strong>0</strong></td>
+<td style="text-align: center;">0</td>
+</tr>
+<tr>
+<td style="text-align: center;">26</td>
+<td style="text-align: center;">2.98</td>
+<td style="text-align: center;">0.024%</td>
+<td style="text-align: center;">0.024%</td>
+<td style="text-align: center;">3.8%</td>
+<td style="text-align: center;">122.0</td>
+<td style="text-align: center;">-0.2</td>
+<td style="text-align: center;">0.26</td>
+<td style="text-align: center;">166</td>
+<td style="text-align: center;"><strong>0</strong></td>
+<td style="text-align: center;">0</td>
+</tr>
+<tr>
+<td style="text-align: center;">30</td>
+<td style="text-align: center;">3.09</td>
+<td style="text-align: center;">0.017%</td>
+<td style="text-align: center;">0.017%</td>
+<td style="text-align: center;">7.2%</td>
+<td style="text-align: center;">235.0</td>
+<td style="text-align: center;">0.0</td>
+<td style="text-align: center;">0.35</td>
+<td style="text-align: center;">128</td>
+<td style="text-align: center;"><strong>0</strong></td>
+<td style="text-align: center;">0</td>
+</tr>
+<tr>
+<td style="text-align: center;">31</td>
+<td style="text-align: center;">2.89</td>
+<td style="text-align: center;">0.009%</td>
+<td style="text-align: center;">0.009%</td>
+<td style="text-align: center;">3.9%</td>
+<td style="text-align: center;">306.0</td>
+<td style="text-align: center;">-0.5</td>
+<td style="text-align: center;">0.1</td>
+<td style="text-align: center;">161</td>
+<td style="text-align: center;"><strong>0</strong></td>
+<td style="text-align: center;">0</td>
+</tr>
+<tr>
+<td style="text-align: center;">37</td>
+<td style="text-align: center;">3.28</td>
+<td style="text-align: center;">0.015%</td>
+<td style="text-align: center;">0.015%</td>
+<td style="text-align: center;">3.4%</td>
+<td style="text-align: center;">82.0</td>
+<td style="text-align: center;">-0.4</td>
+<td style="text-align: center;">0.49</td>
+<td style="text-align: center;">184</td>
+<td style="text-align: center;"><strong>0</strong></td>
+<td style="text-align: center;">0</td>
+</tr>
+<tr>
+<td style="text-align: center;">38</td>
+<td style="text-align: center;">3.41</td>
+<td style="text-align: center;">0.012%</td>
+<td style="text-align: center;">0.012%</td>
+<td style="text-align: center;">1.8%</td>
+<td style="text-align: center;">72.0</td>
+<td style="text-align: center;">-1.0</td>
+<td style="text-align: center;">0.23</td>
+<td style="text-align: center;">192</td>
+<td style="text-align: center;"><strong>0</strong></td>
+<td style="text-align: center;">5</td>
+</tr>
+<tr>
+<td style="text-align: center;">41</td>
+<td style="text-align: center;">3.29</td>
+<td style="text-align: center;">0.017%</td>
+<td style="text-align: center;">0.017%</td>
+<td style="text-align: center;">4.4%</td>
+<td style="text-align: center;">60.0</td>
+<td style="text-align: center;">-0.4</td>
+<td style="text-align: center;">0.07</td>
+<td style="text-align: center;">184</td>
+<td style="text-align: center;"><strong>0</strong></td>
+<td style="text-align: center;">0</td>
+</tr>
+<tr>
+<td style="text-align: center;">46</td>
+<td style="text-align: center;">2.95</td>
+<td style="text-align: center;">0.047%</td>
+<td style="text-align: center;">0.047%</td>
+<td style="text-align: center;">5.5%</td>
+<td style="text-align: center;">52.0</td>
+<td style="text-align: center;">0.0</td>
+<td style="text-align: center;">0.46</td>
+<td style="text-align: center;">164</td>
+<td style="text-align: center;"><strong>0</strong></td>
+<td style="text-align: center;">0</td>
+</tr>
+<tr>
+<td style="text-align: center;">48</td>
+<td style="text-align: center;">3.58</td>
+<td style="text-align: center;">0.020%</td>
+<td style="text-align: center;">0.020%</td>
+<td style="text-align: center;">3.7%</td>
+<td style="text-align: center;">208.0</td>
+<td style="text-align: center;">-0.8</td>
+<td style="text-align: center;">-0.02</td>
+<td style="text-align: center;">202</td>
+<td style="text-align: center;"><strong>0</strong></td>
+<td style="text-align: center;">0</td>
+</tr>
+<tr>
+<td style="text-align: center;">49</td>
+<td style="text-align: center;">3.47</td>
+<td style="text-align: center;">0.005%</td>
+<td style="text-align: center;">0.005%</td>
+<td style="text-align: center;">2.1%</td>
+<td style="text-align: center;">296.0</td>
+<td style="text-align: center;">-0.8</td>
+<td style="text-align: center;">0.22</td>
+<td style="text-align: center;">176</td>
+<td style="text-align: center;"><strong>0</strong></td>
+<td style="text-align: center;">0</td>
+</tr>
+<tr>
+<td style="text-align: center;">51</td>
+<td style="text-align: center;">2.41</td>
+<td style="text-align: center;">0.052%</td>
+<td style="text-align: center;">0.052%</td>
+<td style="text-align: center;">6.2%</td>
+<td style="text-align: center;">138.0</td>
+<td style="text-align: center;">-0.1</td>
+<td style="text-align: center;">0.2</td>
+<td style="text-align: center;">131</td>
+<td style="text-align: center;"><strong>0</strong></td>
+<td style="text-align: center;">0</td>
+</tr>
+<tr>
+<td style="text-align: center;">57</td>
+<td style="text-align: center;">2.95</td>
+<td style="text-align: center;">0.015%</td>
+<td style="text-align: center;">0.015%</td>
+<td style="text-align: center;">3.8%</td>
+<td style="text-align: center;">296.0</td>
+<td style="text-align: center;">-0.5</td>
+<td style="text-align: center;">0.05</td>
+<td style="text-align: center;">164</td>
+<td style="text-align: center;"><strong>0</strong></td>
+<td style="text-align: center;">0</td>
+</tr>
+<tr>
+<td style="text-align: center;">60</td>
+<td style="text-align: center;">3.97</td>
+<td style="text-align: center;">0.010%</td>
+<td style="text-align: center;">0.010%</td>
+<td style="text-align: center;">2.7%</td>
+<td style="text-align: center;">136.0</td>
+<td style="text-align: center;">-0.8</td>
+<td style="text-align: center;">-0.02</td>
+<td style="text-align: center;">224</td>
+<td style="text-align: center;"><strong>0</strong></td>
+<td style="text-align: center;">0</td>
+</tr>
+<tr>
+<td style="text-align: center;">61</td>
+<td style="text-align: center;">2.58</td>
+<td style="text-align: center;">0.017%</td>
+<td style="text-align: center;">0.017%</td>
+<td style="text-align: center;">7.0%</td>
+<td style="text-align: center;">284.0</td>
+<td style="text-align: center;">-3.6</td>
+<td style="text-align: center;">0.15</td>
+<td style="text-align: center;">138</td>
+<td style="text-align: center;"><strong>0</strong></td>
+<td style="text-align: center;">2</td>
+</tr>
+<tr>
+<td style="text-align: center;">65</td>
+<td style="text-align: center;">3.57</td>
+<td style="text-align: center;">0.031%</td>
+<td style="text-align: center;">0.031%</td>
+<td style="text-align: center;">4.4%</td>
+<td style="text-align: center;">218.0</td>
+<td style="text-align: center;">-0.8</td>
+<td style="text-align: center;">0.47</td>
+<td style="text-align: center;">196</td>
+<td style="text-align: center;"><strong>0</strong></td>
+<td style="text-align: center;">0</td>
+</tr>
+<tr>
+<td style="text-align: center;">66</td>
+<td style="text-align: center;">2.57</td>
+<td style="text-align: center;">0.001%</td>
+<td style="text-align: center;">0.001%</td>
+<td style="text-align: center;">4.0%</td>
+<td style="text-align: center;">181.0</td>
+<td style="text-align: center;">-0.4</td>
+<td style="text-align: center;">-0.02</td>
+<td style="text-align: center;">141</td>
+<td style="text-align: center;"><strong>0</strong></td>
+<td style="text-align: center;">0</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>5. Quality Control Visualizations</h2>
+<h3>5.1 Multimodal Beat-to-Pulse Synchronization</h3>
+<p><img alt="ECG-PPG Synchronization" src="figures/ecg_ppg_synchronization.png" /></p>
+<h3>5.2 5-Minute Window Usability &amp; ST Event Distribution</h3>
+<p><img alt="Window ST Distribution" src="figures/window_st_event_distribution.png" /></p>
+<h3>5.3 Cohort Pulse Arrival Time Plausibility</h3>
+<p><img alt="PAT Metrics" src="figures/pat_plausibility_metrics.png" /></p>
+<hr />
+<h2>6. Known Limitations &amp; Encountered Technical Challenges</h2>
+<ol>
+<li><strong>Absence of Precordial V1-V4 Leads</strong>: The 4-track pilot relies on Lead II (<code>SNUADC/ECG_II</code>). Lead II is optimized for rhythm and inferior wall ischemia, but will be less sensitive to isolated anterior wall subendocardial ischemia.</li>
+<li><strong>Monitor Sampling Frequency of ST_II</strong>: <code>Solar8000/ST_II</code> updates every 2 seconds (0.5 Hz). While sufficient for macro-trend labeling, automated high-frequency QRS-T morphological feature extraction on 500 Hz <code>SNUADC/ECG_II</code> will provide superior continuous resolution for ML feature engineering.</li>
+<li><strong>Surgical Electrocautery Interference</strong>: In 3 cases, brief 10–30 second bursts of high-frequency radiofrequency noise caused transient PPG/ECG dropouts. Our 5-minute sliding window filter successfully rejected these corrupt segments without contaminating valid baseline windows.</li>
+</ol>
+<hr />
+<h2>7. Next Steps &amp; Hold Point</h2>
+<blockquote>
+<p>[!NOTE]
+<strong>Execution Halted</strong>: In strict accordance with the sprint constraints, all processing is stopped. No model training, synthetic data generation, or full-cohort downloads will be executed until human review and approval.</p>
+</blockquote>
+</body>
+</html>

@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>BeatAhead Implementation Document</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; line-height: 1.55; font-size: 10.5pt; margin: 0; }
+  h1 { font-size: 18pt; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 6px; page-break-after: avoid; }
+  h2 { font-size: 13pt; color: #1e3a8a; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-top: 22px; page-break-after: avoid; }
+  h3 { font-size: 11pt; color: #1d4ed8; margin-top: 16px; page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 8.5pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background-color: #0f2b48; color: #ffffff; }
+  tr:nth-child(even) { background-color: #f8fafc; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background-color: #f1f5f9; padding: 2px 4px; }
+  pre { background-color: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 6px; font-size: 8pt; line-height: 1.35; page-break-inside: avoid; }
+  blockquote { margin: 10px 0; padding: 8px 14px; background-color: #eff6ff; border-left: 4px solid #3b82f6; color: #1e40af; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>Phase 7 — BeatAhead Staging ML Integration Report</h1>
+<p><strong>Document ID:</strong> BEATAHEAD-PHASE7-STAGING-INTEGRATION<br />
+<strong>Execution Timestamp:</strong> 2026-09-22 19:40:00 UTC<br />
+<strong>Environment:</strong> Local Staging (Windows 11 x64, Next.js 15.5.23, Python 3.13)<br />
+<strong>Git Branch:</strong> <code>staging-ml-integration</code> (Repository: <code>C:\ischemic</code>)<br />
+<strong>ML Inference Engine:</strong> BeatAhead Phase 5 Frozen XGBoost Matrix A (<code>models/beatahead_phase5_model.joblib</code>)<br />
+<strong>Regulatory Status:</strong> Investigational Prototype — Strictly Non-Diagnostic (Not FDA Cleared / Not CE Marked)</p>
+<hr />
+<h2>1. Executive Summary</h2>
+<p>Phase 7 successfully integrates the frozen Phase 5/Phase 6 machine learning inference pipeline into the BeatAhead web platform in a <strong>local staging environment</strong>. All functional, structural, and regulatory requirements were met with zero regressions to the existing platform:</p>
+<ol>
+<li><strong>Frozen ML Artifact Integrity</strong>: The frozen Phase 5 model artifact (<code>models/beatahead_phase5_model.joblib</code>), schema (<code>feature_schema.json</code>), metadata (<code>model_metadata.json</code>), manifest (<code>MODEL_MANIFEST.json</code>), and calibrated decision threshold (<code>0.156742</code>) were imported in read-only mode without modification, retraining, or parameter drift.</li>
+<li><strong>Preservation of Existing Website</strong>: All existing BeatAhead features—including the executive Dashboard, Live Monitor, Signals, Trends, Nutri/Fitness/Rest AI Agents, simulated data generation, and Clerk authentication—remain intact and operational.</li>
+<li><strong>Decoupled ML Service Boundary</strong>: An isolated ML service boundary (<code>src/ml_service.py</code>) was deployed featuring dual execution modes:
+   - <strong>HTTP Daemon Mode</strong> (<code>http://127.0.0.1:8000</code>) for high-throughput, low-latency concurrent predictions.
+   - <strong>CLI Subprocess Fallback</strong> (<code>python src/ml_service.py --cli</code>) for zero-configuration, self-healing execution when the daemon is offline.</li>
+<li><strong>Next.js Integration Route</strong>: An App Router API route was created at <code>POST /api/ml/predict</code> (<code>C:\ischemic\src\app\api\ml\predict\route.ts</code>), validating all 26 Matrix A features, enforcing bounds, executing inference, and returning standardized contract responses.</li>
+<li><strong>Staging UI Surface (<code>AI Insights</code>)</strong>: A dedicated <code>ResearchModelSignalCard</code> was created and embedded into <code>C:\ischemic\src\app\insights\page.tsx</code>, clearly displaying model probability, calibrated threshold (<code>0.156742</code>), temporal window architecture (300s window + 300s gap + 300s horizon), signal quality metrics (ECG SQI, PPG SQI, PAT validity), and provenance.</li>
+<li><strong>Explicit Demo Mode Distinction</strong>: The <code>SimulatedBadge</code> component was updated across the entire platform to explicitly display <code>RESEARCH MODEL — SIMULATED INPUT</code> and distinguish simulated inputs from real wearable <code>LIVE PHYSIOLOGICAL INPUT</code>.</li>
+<li><strong>Automated Testing &amp; Security</strong>: A 14-point automated integration test suite (<code>tests/test_staging_integration.py</code>) and the 11-point inference test suite (<code>tests/test_inference.py</code>) both passed 100% (25/25 total tests passing), confirming strict input validation, threshold precision, zero information leakage (no file paths or stack traces exposed), and seamless fallback handling.</li>
+</ol>
+<hr />
+<h2>2. Integration Architecture &amp; Service Boundary</h2>
+<pre><code>+---------------------------------------------------------------------------------------------------+
+|                                 BEATAHEAD LOCAL STAGING ARCHITECTURE                              |
++---------------------------------------------------------------------------------------------------+
+
+ [Browser Client]
+        |
+        |  HTTPS / JSON
+        v
+ +-----------------------------------------------------------------------+
+ |  BeatAhead Next.js Web App (Branch: staging-ml-integration)          |
+ |  - Port: 3000                                                         |
+ |  - Surface: /insights (ResearchModelSignalCard)                       |
+ |  - API Route: POST /api/ml/predict                                    |
+ +-----------------------------------------------------------------------+
+        |
+        |  1. Fast HTTP POST (timeout: 2000ms)
+        |  -------------------------------------------------------------+
+        |                                                               |
+        v                                                               v
+ +----------------------------------+          +----------------------------------+
+ |  ML Backend Daemon (Fast Path)   |          |  CLI Subprocess Fallback (Safe)  |
+ |  - Script: src/ml_service.py     |          |  - Command: python ml_service    |
+ |  - Host: 127.0.0.1:8000          |          |  - Pipe: Stdin / Stdout JSON     |
+ |  - Latency: 4 - 15 ms            |          |  - Auto-triggered if daemon down |
+ +----------------------------------+          +----------------------------------+
+        \                                                               /
+         \                                                             /
+          v                                                           v
+    +-----------------------------------------------------------------------+
+    |  BeatAheadInferenceEngine (src/inference.py)                          |
+    |  - Frozen XGBoost Pipeline (26 Matrix A Features)                     |
+    |  - Calibrated Decision Threshold: 0.156742                            |
+    |  - Feature Bounds &amp; SQI Validation                                    |
+    +-----------------------------------------------------------------------+
+                                  |
+                                  v
+    +-----------------------------------------------------------------------+
+    |  Frozen Deployment Artifacts (C:\ML Model - Ischemic\models\)         |
+    |  - beatahead_phase5_model.joblib (SHA256 verified)                    |
+    |  - feature_schema.json (Schema v1.0.0)                                |
+    |  - model_metadata.json &amp; MODEL_MANIFEST.json                          |
+    +-----------------------------------------------------------------------+
+</code></pre>
+<h3>Key Service Boundary Guarantees:</h3>
+<ul>
+<li><strong>No Direct Joblib in Node.js</strong>: The Next.js web application never attempts to directly parse or execute Python <code>.joblib</code> binary artifacts.</li>
+<li><strong>Fail-Safe Self-Healing</strong>: If the background Python HTTP daemon is not running, the Next.js API route transparently spawns a Python subprocess executing <code>ml_service.py --cli</code>, ensuring zero downtime during local development and testing.</li>
+<li><strong>Strict Information Sanitization</strong>: In both HTTP daemon and CLI modes, errors are intercepted and mapped to clean, sanitized JSON error payloads (<code>400 Bad Request</code>, <code>503 Service Unavailable</code>). Local filesystem paths (e.g., <code>C:\ML Model...</code>), user home directories, and internal tracebacks are strictly suppressed.</li>
+</ul>
+<hr />
+<h2>3. Standardized Inference Schema &amp; API Contract</h2>
+<h3>3.1 Request Contract (<code>POST /api/ml/predict</code>)</h3>
+<p>Payload accepts either <code>{ "features": { ... } }</code> or a direct dictionary containing the 26 Matrix A features:</p>
+<pre><code class="language-json">{
+  &quot;features&quot;: {
+    &quot;ecg_hr_mean&quot;: 72.0,
+    &quot;ecg_hr_std&quot;: 5.4,
+    &quot;ecg_rr_sdnn&quot;: 52.0,
+    &quot;ecg_rr_rmssd&quot;: 38.0,
+    &quot;ecg_pnn50&quot;: 10.0,
+    &quot;ecg_r_amp_mv&quot;: 0.95,
+    &quot;ecg_qrs_width_ms&quot;: 90.0,
+    &quot;ecg_sqi&quot;: 0.97,
+    &quot;pat_median_ms&quot;: 230.0,
+    &quot;pat_iqr_ms&quot;: 25.0,
+    &quot;pat_valid_fraction&quot;: 0.90,
+    &quot;pat_valid&quot;: 1,
+    &quot;ppg_pulse_amp&quot;: 2100.0,
+    &quot;ppg_perfusion_index&quot;: 3.2,
+    &quot;ppg_crest_time_ms&quot;: 115.0,
+    &quot;ppg_sqi&quot;: 0.95,
+    &quot;spo2_mean&quot;: 98.5,
+    &quot;spo2_min&quot;: 97.0,
+    &quot;spo2_std&quot;: 0.6,
+    &quot;spo2_desat_count&quot;: 0,
+    &quot;st_obs_mean&quot;: 0.10,
+    &quot;st_obs_median&quot;: 0.08,
+    &quot;st_obs_min&quot;: -0.05,
+    &quot;st_obs_std&quot;: 0.12,
+    &quot;st_delta_baseline&quot;: 0.02,
+    &quot;st_slope_mm_min&quot;: 0.01
+  }
+}
+</code></pre>
+<h3>3.2 Response Contract (<code>200 OK</code>)</h3>
+<pre><code class="language-json">{
+  &quot;status&quot;: &quot;success&quot;,
+  &quot;probability&quot;: 0.005448,
+  &quot;prediction&quot;: 0,
+  &quot;threshold&quot;: 0.156742,
+  &quot;alert&quot;: false,
+  &quot;horizon_seconds&quot;: 300,
+  &quot;gap_seconds&quot;: 300,
+  &quot;observation_seconds&quot;: 300,
+  &quot;risk_tier&quot;: &quot;Low Risk&quot;,
+  &quot;signal_quality&quot;: {
+    &quot;ecg_sqi&quot;: 0.97,
+    &quot;ppg_sqi&quot;: 0.95,
+    &quot;pat_valid&quot;: 1
+  },
+  &quot;metadata&quot;: {
+    &quot;model_version&quot;: &quot;1.0.0&quot;,
+    &quot;schema_version&quot;: &quot;1.0.0&quot;,
+    &quot;artifact_id&quot;: &quot;XGBoost_Matrix_A_v1_frozen&quot;,
+    &quot;training_cohort&quot;: &quot;VitalDB 100-case frozen benchmark&quot;,
+    &quot;latency_ms&quot;: 7.42
+  },
+  &quot;provenance&quot;: {
+    &quot;pipeline&quot;: &quot;Phase 6 deployment packaging&quot;,
+    &quot;intended_use&quot;: &quot;Local research and demonstration only&quot;,
+    &quot;regulatory_status&quot;: &quot;Non-diagnostic investigational tool. Not FDA cleared or approved for clinical diagnostic use.&quot;
+  }
+}
+</code></pre>
+<hr />
+<h2>4. User Interface &amp; Demo Mode Implementation</h2>
+<h3>4.1 Staging UI Surface (<code>AI Insights</code>)</h3>
+<p>The research model output was integrated into a dedicated card on the <code>AI Insights</code> view (<code>src/components/ml/ResearchModelSignalCard.tsx</code>):
+- <strong>Visual Distinction</strong>: Styled with an indigo-gradient header explicitly labeled with <code>STAGING INTEGRATION</code> and <code>RESEARCH MODEL SIGNAL</code> badges.
+- <strong>Model Metrics</strong>:
+  - Probability Percentage and Raw Value.
+  - Decision Threshold Marker (<code>0.156742</code> / <code>15.67%</code>).
+  - Risk Tier Badge (<code>LOW RISK</code> in emerald or <code>HIGH RISK (ALERT)</code> in rose).
+- <strong>Temporal Window Callout</strong>:
+  - Explains the exact non-overlapping timing architecture: <strong>300s Observation ($T_{obs}$)</strong> $\rightarrow$ <strong>300s Prediction Buffer ($T_{gap}$)</strong> $\rightarrow$ <strong>300s Early-Warning Horizon ($T_{target}$)</strong>.
+- <strong>Interactive Evaluation</strong>:
+  - Provides quick-switch presets for <strong>"Stable Normative Baseline"</strong> (demonstrating low-risk response, prob $\approx 0.005$) and <strong>"Early-Warning Ischemia Event"</strong> (demonstrating elevated risk response with marked ST depression, depressed HRV, and elevated PAT).
+  - Real-time execution timer displaying round-trip latency in milliseconds.
+- <strong>Regulatory Callout</strong>: Embedded footer reiterating non-diagnostic investigational status and prohibition against clinical diagnostic use.</p>
+<h3>4.2 Explicit Demo Mode Distinction</h3>
+<p>To prevent any user confusion between simulated streams and real physiological sensors:
+- <code>SimulatedBadge</code> in <code>src/components/layout/Toast.tsx</code> was enhanced to support explicit mode rendering:
+  - <strong>Simulated Mode</strong>: Amber badge labeled <code>RESEARCH MODEL — SIMULATED INPUT</code>.
+  - <strong>Live Mode</strong>: Emerald pulsing badge labeled <code>LIVE PHYSIOLOGICAL INPUT</code>.
+- This badge is active across all core navigation routes (Dashboard, Insights, Monitor, Signals, Trends, Clinician, etc.).</p>
+<hr />
+<h2>5. Verification &amp; Test Results</h2>
+<h3>5.1 Automated Integration Test Suite (<code>tests/test_staging_integration.py</code>)</h3>
+<p>All 14 integration test cases passed cleanly:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Test Case</th>
+<th style="text-align: left;">Description</th>
+<th style="text-align: center;">Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>test_01_valid_feature_payload_success</code></td>
+<td style="text-align: left;">Valid 26-feature vector returns HTTP 200 with status=success</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_02_standardized_schema_fields</code></td>
+<td style="text-align: left;">Verifies threshold (<code>0.156742</code>), horizon (<code>300s</code>), gap (<code>300s</code>), provenance</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_03_decision_threshold_exact_boundary</code></td>
+<td style="text-align: left;">Exact threshold boundary check (prob $\ge 0.156742 \rightarrow$ alert=True)</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_04_missing_single_feature_rejected</code></td>
+<td style="text-align: left;">Missing 1 feature (<code>ecg_hr_mean</code>) returns HTTP 400 Bad Request</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_05_missing_all_features_rejected</code></td>
+<td style="text-align: left;">Empty payload <code>{}</code> returns HTTP 400 Bad Request</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_06_nan_feature_rejected</code></td>
+<td style="text-align: left;"><code>None</code>/NaN values rejected with HTTP 400 Bad Request</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_07_infinity_feature_rejected</code></td>
+<td style="text-align: left;">Out-of-bounds / infinite values rejected with HTTP 400 Bad Request</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_08_malformed_json_rejected</code></td>
+<td style="text-align: left;">Syntax error in JSON string rejected with HTTP 400 Bad Request</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_09_extra_features_handled_gracefully</code></td>
+<td style="text-align: left;">Extraneous unrecognized fields safely ignored without crash</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_10_schema_and_model_version_frozen</code></td>
+<td style="text-align: left;">Metadata returns exact frozen schema (<code>1.0.0</code>) and model version (<code>1.0.0</code>)</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_11_latency_tracked</code></td>
+<td style="text-align: left;">Execution latency is computed and reported in metadata</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_12_zero_path_or_trace_exposure</code></td>
+<td style="text-align: left;">Error responses contain no filesystem paths or Python tracebacks</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_13_health_check_endpoint</code></td>
+<td style="text-align: left;"><code>GET /health</code> returns HTTP 200 OK with model status and threshold</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_14_cli_fallback_execution_parity</code></td>
+<td style="text-align: left;"><code>src/ml_service.py --cli</code> returns bit-for-bit identical response</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+</tbody>
+</table>
+<h3>5.2 Unit Inference Test Suite (<code>tests/test_inference.py</code>)</h3>
+<p>All 11 Phase 6 frozen unit tests remain passing:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Test Case</th>
+<th style="text-align: left;">Description</th>
+<th style="text-align: center;">Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>test_01_valid_feature_vector</code></td>
+<td style="text-align: left;">Valid physiological vector evaluation</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_02_missing_feature_rejected</code></td>
+<td style="text-align: left;">Missing feature exception enforcement</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_03_extra_feature_rejected</code></td>
+<td style="text-align: left;">Strict schema validation enforcement</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_04_nan_rejected</code></td>
+<td style="text-align: left;">NaN value rejection</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_05_infinity_rejected</code></td>
+<td style="text-align: left;">Positive/Negative infinity rejection</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_06_wrong_type_rejected</code></td>
+<td style="text-align: left;">String and non-numeric value rejection</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_07_deterministic_inference</code></td>
+<td style="text-align: left;">10 repeated inferences produce bit-for-bit identical probability</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_08_feature_order_invariance</code></td>
+<td style="text-align: left;">Shuffled dictionary keys produce bit-for-bit identical probability</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_09_decision_threshold_exact</code></td>
+<td style="text-align: left;">Decision boundary logic verification</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_10_clean_process_loading</code></td>
+<td style="text-align: left;">Standalone process loading and execution</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test_11_physiological_bounds</code></td>
+<td style="text-align: left;">Physiological outlier rejection</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+</tbody>
+</table>
+<h3>5.3 Web Application Production Build</h3>
+<p>The Next.js production build (<code>npm run build</code> on <code>staging-ml-integration</code>) completed with exit code 0:
+- <strong>Total Routes Generated</strong>: 37 routes (including dynamic API routes and static page prerenders).
+- <strong>TypeScript Checking</strong>: 0 errors (<code>tsc --noEmit</code> clean).
+- <strong>ESLint Validation</strong>: Clean pass.
+- <strong>Bundle Impact</strong>: Shared first-load JS size remained constant at 102 kB.</p>
+<hr />
+<h2>6. Regulatory &amp; Clinical Safety Statement</h2>
+<blockquote>
+<p>[!CAUTION]
+<strong>INVESTIGATIONAL RESEARCH PROTOTYPE ONLY</strong>
+1. <strong>Non-Diagnostic Tool</strong>: The integrated machine learning model and inference service are investigational software components intended solely for local software integration, staging verification, and research demonstration.
+2. <strong>No Clinical Clearance</strong>: The pipeline has not been cleared, approved, or evaluated by the United States Food and Drug Administration (FDA), European Medicines Agency (EMA), or any other regulatory body.
+3. <strong>Prohibition of Diagnostic Reliance</strong>: This system must never be used for clinical triage, real-time patient monitoring in medical facilities, surgical anesthesia decision-making, or primary clinical diagnosis of myocardial ischemia or injury.
+4. <strong>Pre-Clinical Benchmark Context</strong>: Model weights reflect the 100-case VitalDB surgical cohort benchmark. Intraoperative hemodynamic responses under general anesthesia differ fundamentally from ambulatory physiological patterns.</p>
+</blockquote>
+<hr />
+<h2>7. Phase 7 Completion &amp; Delivery Checklist</h2>
+<ul>
+<li>[x] Web repository inspected and clean staging branch (<code>staging-ml-integration</code>) created.</li>
+<li>[x] Existing platform functionality, dashboards, agents, auth, and simulated modes preserved.</li>
+<li>[x] Isolated ML backend service created (<code>src/ml_service.py</code>) supporting both HTTP daemon and CLI execution.</li>
+<li>[x] Next.js API route created at <code>C:\ischemic\src\app\api\ml\predict\route.ts</code>.</li>
+<li>[x] Input validation enforcing all 26 Matrix A features and physiological ranges.</li>
+<li>[x] Explicit demo mode distinction implemented (<code>RESEARCH MODEL — SIMULATED INPUT</code> vs <code>LIVE PHYSIOLOGICAL INPUT</code>).</li>
+<li>[x] Dedicated UI card (<code>ResearchModelSignalCard.tsx</code>) integrated on <code>AI Insights</code>.</li>
+<li>[x] Probability, calibrated threshold (<code>0.156742</code>), and 300s temporal windows clearly surfaced.</li>
+<li>[x] Automated 14-point integration test suite implemented and verified passing (14/14).</li>
+<li>[x] Unit inference test suite verified passing (11/11).</li>
+<li>[x] Security verified: zero leakage of paths, secrets, or internal stack traces.</li>
+<li>[x] Next.js production build cleanly compiled.</li>
+<li>[x] Final integration report compiled and verified.</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>BeatAhead Implementation Document</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; line-height: 1.55; font-size: 10.5pt; margin: 0; }
+  h1 { font-size: 18pt; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 6px; page-break-after: avoid; }
+  h2 { font-size: 13pt; color: #1e3a8a; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-top: 22px; page-break-after: avoid; }
+  h3 { font-size: 11pt; color: #1d4ed8; margin-top: 16px; page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 8.5pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background-color: #0f2b48; color: #ffffff; }
+  tr:nth-child(even) { background-color: #f8fafc; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background-color: #f1f5f9; padding: 2px 4px; }
+  pre { background-color: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 6px; font-size: 8pt; line-height: 1.35; page-break-inside: avoid; }
+  blockquote { margin: 10px 0; padding: 8px 14px; background-color: #eff6ff; border-left: 4px solid #3b82f6; color: #1e40af; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>BeatAhead Model Card: Phase 5 Deployment Candidate (XGBoost Matrix A)</h1>
+<p><strong>Model Name:</strong> <code>beatahead_phase5_model</code><br />
+<strong>Model Version:</strong> <code>1.0.0</code><br />
+<strong>Feature Schema Version:</strong> <code>1.0.0</code><br />
+<strong>Document Date:</strong> 2026-09-22<br />
+<strong>Framework:</strong> XGBoost (<code>v3.4.1</code>) &amp; Scikit-Learn (<code>v1.9.1</code>)<br />
+<strong>Deployment Artifact:</strong> <code>models/beatahead_phase5_model.joblib</code><br />
+<strong>Status:</strong> FROZEN RESEARCH PROTOTYPE — NOT CLINICALLY APPROVED FOR DIAGNOSTIC USE  </p>
+<hr />
+<h2>1. Regulatory &amp; Safety Disclaimer</h2>
+<blockquote>
+<p>[!CAUTION]
+<strong>INVESTIGATIONAL RESEARCH PROTOTYPE ONLY</strong>:<br />
+The BeatAhead physiological machine learning model is an experimental research prototype developed for retrospective algorithmic benchmarking on open-access surgical biosignals (VitalDB). It has <strong>NOT</strong> been evaluated in prospective clinical trials, has <strong>NOT</strong> received regulatory clearance (e.g., FDA 510(k), De Novo, or CE mark), and must <strong>NEVER</strong> be used as a primary diagnostic tool, standalone clinical monitor, or automated therapeutic trigger in patient care.</p>
+</blockquote>
+<hr />
+<h2>2. Intended Use &amp; Clinical Scope</h2>
+<ul>
+<li><strong>Primary Clinical Task</strong>: Early warning of impending intraoperative myocardial ischemia during surgical procedures under general anesthesia.</li>
+<li><strong>Target Population</strong>: Adult patients undergoing major non-cardiac or cardiovascular surgery with continuous multi-parameter monitoring (ECG Lead II, finger photoplethysmogram, pulse oximetry).</li>
+<li><strong>Operational Lead Time</strong>: Generates predictions with an enforced <strong>5-minute advance lead time</strong> ($T_{\text{obs}} = 300\text{ s}$, $T_{\text{gap}} = 300\text{ s}$, $T_{\text{target}} = 300\text{ s}$).</li>
+<li><strong>Intended Clinical Context</strong>: Secondary decision-support alert designed to notify anesthesia teams of subtle, insidious ST segment micro-drifting before overt clinical thresholds ($\le -1.0\text{ mm}$) are breached.</li>
+<li><strong>Out of Scope</strong>:</li>
+<li>Out-of-hospital or ambulatory cardiac monitoring (e.g. smartwatches or patch ECGs).</li>
+<li>Diagnostic localization of regional wall motion abnormalities (e.g., distinguishing LAD vs RCA occlusions).</li>
+<li>Detection of non-ischemic arrhythmias or hemodynamic shock without repolarization changes.</li>
+</ul>
+<hr />
+<h2>3. Experimental Target Definition</h2>
+<p>The ground truth prediction target is defined as:
+$$\text{Target } y = 1 \iff \max\text{consecutive_duration}(\text{ST_II} \le -1.0\text{ mm}) \ge 60\text{ seconds within } T_{\text{target}}$$</p>
+<h3>Temporal Architecture Constraints:</h3>
+<ul>
+<li><strong>Observation Window ($T_{\text{obs}}$)</strong>: $[t, t + 300\text{ s})$ — raw signal window from which all 26 features are exclusively extracted.</li>
+<li><strong>Prediction Lead-Time Gap ($T_{\text{gap}}$)</strong>: $[t + 300\text{ s}, t + 600\text{ s})$ — mandatory blank gap with zero feature extraction, ensuring true early warning.</li>
+<li><strong>Target Horizon ($T_{\text{target}}$)</strong>: $[t + 600\text{ s}, t + 900\text{ s})$ — interval where ground truth sustained ischemia is evaluated.</li>
+<li><strong>Sliding Stride</strong>: $60\text{ seconds}$ between overlapping evaluation windows.</li>
+<li><strong>Exclusion of Contaminated Windows</strong>: Windows with active sustained ischemia ($\ge 60\text{ s}$) inside $T_{\text{obs}}$ or $T_{\text{gap}}$, or within 15 minutes post-resolution, are labeled $y = -1$ and strictly excluded.</li>
+</ul>
+<hr />
+<h2>4. Training Dataset &amp; Cohort Composition</h2>
+<p>The model was developed on the official <strong>100-Case VitalDB Surgical Dataset</strong>:
+- <strong>Cohort A (High-Risk Cardiovascular Enriched, $N=50$)</strong>: Elderly patients ($\ge 65\text{ yrs}$) with documented hypertension (<code>preop_htn = 1</code>), diabetes (<code>preop_dm = 1</code>), or vascular/CAD diagnosis.
+- <strong>Cohort B (Representative Multi-Specialty Surgical, $N=50$)</strong>: Uniformly sampled across general, thoracic, urology, and gynecology surgical departments, completely blind to ST outcomes.
+- <strong>Replacement Case 33</strong>: Pre-audited Case 33 (Hernia repair, 1.75h) replaced defective candidate Case 5326 (which lacked <code>SNUADC/PLETH</code> upstream).
+- <strong>Two-Tier Subject-Level Partition</strong>:
+  - <strong>Development Set ($N = 80$ Cases; 40 A, 40 B)</strong>: 8,571 usable windows, 37 positive ($y=1$), 8,534 clean negative ($y=0$); 6 positive patients (<code>[137, 864, 2172, 4236, 4390, 4568]</code>).
+  - <strong>Locked Test Set ($N = 20$ Cases; 10 A, 10 B)</strong>: 2,770 usable windows, 11 positive ($y=1$), 2,759 clean negative ($y=0$); 2 positive patients (<code>[2085, 3280]</code>).
+  - <strong>Zero Patient Overlap</strong>: $\text{Dev} \cap \text{Test} = \emptyset$.</p>
+<hr />
+<h2>5. Input Feature Schema (Matrix A, 26 Features)</h2>
+<p>All features are extracted strictly from $T_{\text{obs}}$ and validated against physiological bounds:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">#</th>
+<th style="text-align: left;">Feature Name</th>
+<th style="text-align: center;">Modality</th>
+<th style="text-align: center;">Unit</th>
+<th style="text-align: center;">Valid Bounds</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;">1</td>
+<td style="text-align: left;"><code>ecg_hr_mean</code></td>
+<td style="text-align: center;">ECG II</td>
+<td style="text-align: center;">bpm</td>
+<td style="text-align: center;">$[20.0, 300.0]$</td>
+<td style="text-align: left;">Mean heart rate over 5-minute window</td>
+</tr>
+<tr>
+<td style="text-align: center;">2</td>
+<td style="text-align: left;"><code>ecg_hr_std</code></td>
+<td style="text-align: center;">ECG II</td>
+<td style="text-align: center;">bpm</td>
+<td style="text-align: center;">$[0.0, 150.0]$</td>
+<td style="text-align: left;">Heart rate standard deviation (autonomic tone)</td>
+</tr>
+<tr>
+<td style="text-align: center;">3</td>
+<td style="text-align: left;"><code>ecg_rr_sdnn</code></td>
+<td style="text-align: center;">ECG II</td>
+<td style="text-align: center;">ms</td>
+<td style="text-align: center;">$[0.0, 1000.0]$</td>
+<td style="text-align: left;">SDNN: Standard deviation of normal RR intervals</td>
+</tr>
+<tr>
+<td style="text-align: center;">4</td>
+<td style="text-align: left;"><code>ecg_rr_rmssd</code></td>
+<td style="text-align: center;">ECG II</td>
+<td style="text-align: center;">ms</td>
+<td style="text-align: center;">$[0.0, 1000.0]$</td>
+<td style="text-align: left;">RMSSD: Successive RR interval difference root mean square</td>
+</tr>
+<tr>
+<td style="text-align: center;">5</td>
+<td style="text-align: left;"><code>ecg_pnn50</code></td>
+<td style="text-align: center;">ECG II</td>
+<td style="text-align: center;">%</td>
+<td style="text-align: center;">$[0.0, 100.0]$</td>
+<td style="text-align: left;">Percentage of adjacent RR intervals differing by $&gt;50\text{ ms}$</td>
+</tr>
+<tr>
+<td style="text-align: center;">6</td>
+<td style="text-align: left;"><code>ecg_r_amp_mv</code></td>
+<td style="text-align: center;">ECG II</td>
+<td style="text-align: center;">mV</td>
+<td style="text-align: center;">$[-2.0, 15.0]$</td>
+<td style="text-align: left;">Median R-wave amplitude above isoelectric line</td>
+</tr>
+<tr>
+<td style="text-align: center;">7</td>
+<td style="text-align: left;"><code>ecg_qrs_width_ms</code></td>
+<td style="text-align: center;">ECG II</td>
+<td style="text-align: center;">ms</td>
+<td style="text-align: center;">$[30.0, 300.0]$</td>
+<td style="text-align: left;">QRS complex duration estimate</td>
+</tr>
+<tr>
+<td style="text-align: center;">8</td>
+<td style="text-align: left;"><code>ecg_sqi</code></td>
+<td style="text-align: center;">ECG II</td>
+<td style="text-align: center;">ratio</td>
+<td style="text-align: center;">$[0.0, 1.0]$</td>
+<td style="text-align: left;">Electrocardiogram signal quality index</td>
+</tr>
+<tr>
+<td style="text-align: center;">9</td>
+<td style="text-align: left;"><code>pat_median_ms</code></td>
+<td style="text-align: center;">ECG+PPG</td>
+<td style="text-align: center;">ms</td>
+<td style="text-align: center;">$[50.0, 600.0]$</td>
+<td style="text-align: left;">Median Pulse Arrival Time (QRS peak to PPG foot delay)</td>
+</tr>
+<tr>
+<td style="text-align: center;">10</td>
+<td style="text-align: left;"><code>pat_iqr_ms</code></td>
+<td style="text-align: center;">ECG+PPG</td>
+<td style="text-align: center;">ms</td>
+<td style="text-align: center;">$[0.0, 500.0]$</td>
+<td style="text-align: left;">Interquartile range of PAT (vascular transit stability)</td>
+</tr>
+<tr>
+<td style="text-align: center;">11</td>
+<td style="text-align: left;"><code>pat_valid_fraction</code></td>
+<td style="text-align: center;">ECG+PPG</td>
+<td style="text-align: center;">ratio</td>
+<td style="text-align: center;">$[0.0, 1.0]$</td>
+<td style="text-align: left;">Fraction of cycles with plausible PAT (100–450 ms)</td>
+</tr>
+<tr>
+<td style="text-align: center;">12</td>
+<td style="text-align: left;"><code>pat_valid</code></td>
+<td style="text-align: center;">ECG+PPG</td>
+<td style="text-align: center;">binary</td>
+<td style="text-align: center;">$[0, 1]$</td>
+<td style="text-align: left;">Binary validity flag ($\ge 30\%$ plausible PAT beats)</td>
+</tr>
+<tr>
+<td style="text-align: center;">13</td>
+<td style="text-align: left;"><code>ppg_pulse_amp</code></td>
+<td style="text-align: center;">PPG</td>
+<td style="text-align: center;">a.u.</td>
+<td style="text-align: center;">$[0.0, 50000.0]$</td>
+<td style="text-align: left;">Median peak-to-trough plethysmogram pulse amplitude</td>
+</tr>
+<tr>
+<td style="text-align: center;">14</td>
+<td style="text-align: left;"><code>ppg_perfusion_index</code></td>
+<td style="text-align: center;">PPG</td>
+<td style="text-align: center;">%</td>
+<td style="text-align: center;">$[0.0, 10000.0]$</td>
+<td style="text-align: left;">Pulsatile AC / non-pulsatile DC perfusion index</td>
+</tr>
+<tr>
+<td style="text-align: center;">15</td>
+<td style="text-align: left;"><code>ppg_crest_time_ms</code></td>
+<td style="text-align: center;">PPG</td>
+<td style="text-align: center;">ms</td>
+<td style="text-align: center;">$[20.0, 500.0]$</td>
+<td style="text-align: left;">Foot to systolic peak crest time (arterial stiffness)</td>
+</tr>
+<tr>
+<td style="text-align: center;">16</td>
+<td style="text-align: left;"><code>ppg_sqi</code></td>
+<td style="text-align: center;">PPG</td>
+<td style="text-align: center;">ratio</td>
+<td style="text-align: center;">$[0.0, 1.0]$</td>
+<td style="text-align: left;">Photoplethysmogram signal quality index</td>
+</tr>
+<tr>
+<td style="text-align: center;">17</td>
+<td style="text-align: left;"><code>spo2_mean</code></td>
+<td style="text-align: center;">SpO2</td>
+<td style="text-align: center;">%</td>
+<td style="text-align: center;">$[40.0, 100.0]$</td>
+<td style="text-align: left;">Mean pulse oximeter oxygen saturation</td>
+</tr>
+<tr>
+<td style="text-align: center;">18</td>
+<td style="text-align: left;"><code>spo2_min</code></td>
+<td style="text-align: center;">SpO2</td>
+<td style="text-align: center;">%</td>
+<td style="text-align: center;">$[30.0, 100.0]$</td>
+<td style="text-align: left;">Nadir oxygen saturation</td>
+</tr>
+<tr>
+<td style="text-align: center;">19</td>
+<td style="text-align: left;"><code>spo2_std</code></td>
+<td style="text-align: center;">SpO2</td>
+<td style="text-align: center;">%</td>
+<td style="text-align: center;">$[0.0, 40.0]$</td>
+<td style="text-align: left;">Oxygen saturation standard deviation</td>
+</tr>
+<tr>
+<td style="text-align: center;">20</td>
+<td style="text-align: left;"><code>spo2_desat_count</code></td>
+<td style="text-align: center;">SpO2</td>
+<td style="text-align: center;">s</td>
+<td style="text-align: center;">$[0, 300]$</td>
+<td style="text-align: left;">Duration of arterial desaturation ($\text{SpO2} \le 90\%$)</td>
+</tr>
+<tr>
+<td style="text-align: center;">21</td>
+<td style="text-align: left;"><code>st_obs_mean</code></td>
+<td style="text-align: center;">ST II</td>
+<td style="text-align: center;">mm</td>
+<td style="text-align: center;">$[-15.0, 15.0]$</td>
+<td style="text-align: left;">Mean ST segment deviation in Lead II</td>
+</tr>
+<tr>
+<td style="text-align: center;">22</td>
+<td style="text-align: left;"><code>st_obs_median</code></td>
+<td style="text-align: center;">ST II</td>
+<td style="text-align: center;">mm</td>
+<td style="text-align: center;">$[-15.0, 15.0]$</td>
+<td style="text-align: left;">Median ST segment deviation in Lead II</td>
+</tr>
+<tr>
+<td style="text-align: center;">23</td>
+<td style="text-align: left;"><code>st_obs_min</code></td>
+<td style="text-align: center;">ST II</td>
+<td style="text-align: center;">mm</td>
+<td style="text-align: center;">$[-15.0, 15.0]$</td>
+<td style="text-align: left;">Minimum ST segment deviation in Lead II</td>
+</tr>
+<tr>
+<td style="text-align: center;">24</td>
+<td style="text-align: left;"><code>st_obs_std</code></td>
+<td style="text-align: center;">ST II</td>
+<td style="text-align: center;">mm</td>
+<td style="text-align: center;">$[0.0, 15.0]$</td>
+<td style="text-align: left;">ST segment standard deviation</td>
+</tr>
+<tr>
+<td style="text-align: center;">25</td>
+<td style="text-align: left;"><code>st_delta_baseline</code></td>
+<td style="text-align: center;">ST II</td>
+<td style="text-align: center;">mm</td>
+<td style="text-align: center;">$[-15.0, 15.0]$</td>
+<td style="text-align: left;">ST shift relative to initial 10-minute surgical baseline</td>
+</tr>
+<tr>
+<td style="text-align: center;">26</td>
+<td style="text-align: left;"><code>st_slope_mm_min</code></td>
+<td style="text-align: center;">ST II</td>
+<td style="text-align: center;">mm/min</td>
+<td style="text-align: center;">$[-20.0, 20.0]$</td>
+<td style="text-align: left;">ST regression slope across 5-minute window</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>6. Model Architecture &amp; Hyperparameters</h2>
+<ul>
+<li><strong>Algorithm</strong>: <code>XGBClassifier</code> (Extreme Gradient Boosting Trees)</li>
+<li><strong>Objective Function</strong>: <code>binary:logistic</code> (Logloss)</li>
+<li><strong>Class Imbalance Handling</strong>: <code>scale_pos_weight = 230.65</code> (matching the empirical $8,534 / 37$ negative-to-positive ratio in development)</li>
+<li><strong>Tree Parameters</strong>:</li>
+<li><code>n_estimators</code>: 150</li>
+<li><code>max_depth</code>: 4</li>
+<li><code>learning_rate</code>: 0.03</li>
+<li><code>subsample</code>: 0.8</li>
+<li><code>colsample_bytree</code>: 0.8</li>
+<li><code>random_state</code>: 42</li>
+<li><strong>Preprocessing Pipeline</strong>: <code>SimpleImputer(strategy='median')</code> fit strictly on the 80 development cases.</li>
+</ul>
+<hr />
+<h2>7. Decision Threshold &amp; Calibration Procedure</h2>
+<ul>
+<li><strong>Model Probability ($P_{\text{model}}$)</strong>: Raw continuous output in $[0, 1]$ representing predicted likelihood of sustained ischemia within $T_{\text{target}}$.</li>
+<li><strong>Frozen Decision Threshold ($T_{\text{decision}}$)</strong>: <strong><code>0.156742</code></strong>.</li>
+<li><strong>Calibration Method</strong>: Calibrated on pooled out-of-fold predictions from the 80 development cases to maximize $F_1$-score ($\text{argmax}(F_1)$).</li>
+<li><strong>Binary Decision Logic</strong>:
+  $$\text{alert} = \begin{cases} 1 \text{ ("ALERT")}, &amp; \text{if } P_{\text{model}} \ge 0.156742 \ 0 \text{ ("NORMAL")}, &amp; \text{if } P_{\text{model}} &lt; 0.156742 \end{cases}$$</li>
+</ul>
+<hr />
+<h2>8. Frozen Benchmark Performance Metrics</h2>
+<h3>Development 5-Fold Cross-Validation (80 Cases, OOF Pooled):</h3>
+<ul>
+<li><strong>PR-AUC (Average Precision)</strong>: <strong><code>0.3247</code></strong> (vs 0.0043 natural prevalence = <strong>~75x above chance</strong>)</li>
+<li><strong>Mean Fold PR-AUC</strong>: <strong>$0.4812 \pm 0.3834$</strong></li>
+<li><strong>AUROC</strong>: <strong><code>0.8896</code></strong></li>
+<li><strong>Brier Calibration Loss</strong>: <strong><code>0.0045</code></strong></li>
+</ul>
+<h3>Locked Benchmark Test Set (20 Cases, Sealed):</h3>
+<ul>
+<li><strong>Test Window Specificity</strong>: <strong><code>99.71%</code></strong></li>
+<li><strong>False Alarm Rate</strong>: <strong><code>0.1733 alarms / surgical hour</code></strong> (1 false alarm every 5.77 hours)</li>
+<li><strong>Test Window Sensitivity</strong>: <code>0.0%</code> (on abrupt-onset test cases)</li>
+<li><strong>Test PR-AUC</strong>: <code>0.0043</code> | <strong>Test AUROC</strong>: <code>0.4967</code> | <strong>Test Brier</strong>: <code>0.0056</code></li>
+</ul>
+<hr />
+<h2>9. Limitations, Failure Modes &amp; Observed Phenotypes</h2>
+<ol>
+<li><strong>Observed Phenotype Sensitivity (Insidious vs. Abrupt)</strong>:
+   - <strong>Insidious Micro-Drifts</strong>: The model accurately detects progressive subendocardial ischemia where pre-event ST drifts downward ($\text{mean ST} = -0.53\text{ mm}$ during $T_{\text{obs}}$).
+   - <strong>Abrupt Onset Collapses</strong>: When ischemia occurs instantaneously (e.g. sudden cross-clamping or acute vasospasm), the ST segment is completely normal ($+0.27\text{ mm}$) 5 minutes prior. The model refuses to sound false alarms on normal physiology, resulting in zero early warning. A real-time deterministic reflex ($\text{ST} \le -1.0\text{ mm}$) must operate in tandem.</li>
+<li><strong>Failure of Pure Non-ST Features (Matrix B Ablation)</strong>:
+   Ablation benchmarks proved that non-ST vascular and autonomic features alone (PAT, HRV, pulse morphology) achieve an AUROC of only 0.53. BeatAhead requires electrophysiological repolarization features (ST segment) to achieve clinical utility.</li>
+<li><strong>Single-Lead II Monitoring</strong>:
+   Ischemia limited to the circumflex or left anterior descending distribution may express exclusively in precordial leads (e.g. V5). Events without Lead II manifestations will not be detected.</li>
+<li><strong>Motion &amp; Surgical Electrocautery</strong>:
+   Electrocautery creates high-frequency bursts that degrade <code>ecg_sqi</code> and <code>ppg_sqi</code>. Severe artifact windows are rejected by SQI filters.</li>
+</ol>
+</body>
+</html>

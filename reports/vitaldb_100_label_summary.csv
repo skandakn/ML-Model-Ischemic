@@ -1,0 +1,17 @@
+cohort,target_category,target_label,count
+A,ambiguous_buffer,-1,1295
+A,confirmed_negative,0,5568
+A,event_already_in_obs,-1,90
+A,event_in_gap,-1,41
+A,post_event_recovery,-1,125
+A,sqi_fail_insufficient_st_samples,-1,177
+A,sqi_fail_numeric_missingness,-1,499
+A,valid_early_warning_pos,1,26
+B,ambiguous_buffer,-1,1491
+B,confirmed_negative,0,5639
+B,event_already_in_obs,-1,8
+B,event_in_gap,-1,19
+B,post_event_recovery,-1,10
+B,sqi_fail_insufficient_st_samples,-1,214
+B,sqi_fail_numeric_missingness,-1,452
+B,valid_early_warning_pos,1,22

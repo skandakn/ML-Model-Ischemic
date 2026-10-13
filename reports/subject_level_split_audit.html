@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>BeatAhead Implementation Document</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; line-height: 1.55; font-size: 10.5pt; margin: 0; }
+  h1 { font-size: 18pt; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 6px; page-break-after: avoid; }
+  h2 { font-size: 13pt; color: #1e3a8a; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-top: 22px; page-break-after: avoid; }
+  h3 { font-size: 11pt; color: #1d4ed8; margin-top: 16px; page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 8.5pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background-color: #0f2b48; color: #ffffff; }
+  tr:nth-child(even) { background-color: #f8fafc; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background-color: #f1f5f9; padding: 2px 4px; }
+  pre { background-color: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 6px; font-size: 8pt; line-height: 1.35; page-break-inside: avoid; }
+  blockquote { margin: 10px 0; padding: 8px 14px; background-color: #eff6ff; border-left: 4px solid #3b82f6; color: #1e40af; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>BeatAhead Subject-Level Split Simulation &amp; Pre-Modeling Evaluation Audit</h1>
+<p><strong>Document:</strong> <code>reports/subject_level_split_audit.md</code><br />
+<strong>Execution Date:</strong> 2026-09-22 16:41:40<br />
+<strong>Cohort Scope:</strong> Final Verified 100-Case Dataset (50 Cohort A, 50 Cohort B)<br />
+<strong>Status:</strong> PRE-MODELING AUDIT COMPLETE — MACHINE LEARNING STRICTLY HALTED</p>
+<hr />
+<h2>Executive Summary</h2>
+<ol>
+<li><strong>Complete 100-Case Cohort Ingestion</strong>: The final 100th case was completed by validating pre-audited replacement <strong>Case 33</strong> (General surgery, Hernia repair, 1.75h) which possesses all 4 mandatory tracks (<code>SNUADC/ECG_II</code>, <code>SNUADC/PLETH</code>, <code>Solar8000/PLETH_SPO2</code>, <code>Solar8000/ST_II</code>). The final verified dataset comprises <strong>exactly 100 cases</strong> (50 Cohort A, 50 Cohort B) with <strong>1,143.14 MB (~1.12 GB)</strong> raw storage.</li>
+<li><strong>Corrected Window Terminology</strong>: The temporal windowing architecture is formally documented as <strong>overlapping sliding windows with a 60-second stride</strong> ($T_{\text{obs}} = 300\text{ s}$, $T_{\text{gap}} = 300\text{ s}$, $T_{\text{target}} = 300\text{ s}$, total span $= 900\text{ s}$).</li>
+<li><strong>Case-Level Isolation Audit</strong>: Zero window-level random splitting was permitted. 20 independent, deterministic 70/15/15 grouped split simulations confirmed that the same patient never appears in multiple partitions.</li>
+<li><strong>Critical Finding on 70/15/15 Viability</strong>: Because exactly <strong>8 patients</strong> in the 100-case cohort developed sustained myocardial ischemia, a single 15% test set contains only <strong>1 to 2 positive cases</strong> (5 to 17 positive windows). Performance estimates on a single test partition will have <strong>extremely wide confidence intervals and high empirical variance</strong>.</li>
+<li><strong>Recommended Evaluation Protocol</strong>: Grouped 5-Fold Cross-Validation (<code>StratifiedGroupKFold</code>) provides substantially superior development stability by rotating all 8 positive cases across folds while maintaining strict subject-level isolation. A small locked test set (20 cases) should be held strictly untouched for final confirmation.</li>
+<li><strong>Dual Modeling Matrix Specification</strong>: Metadata specifications for <strong>Model Matrix A</strong> (Multimodal + Pre-event ST, 26 features) and <strong>Model Matrix B</strong> (Pure Non-ST, 20 features) are finalized for future ablation benchmarking.</li>
+</ol>
+<hr />
+<h2>1. 100th Case Validation &amp; Final Cohort Integrity</h2>
+<p>Defective candidate Case 5326 (where the VitalDB server binary file omitted <code>SNUADC/PLETH</code> despite being indexed in <code>trks.csv</code>) was replaced with pre-audited <strong>Case 33</strong>:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Parameter</th>
+<th style="text-align: left;">Specification / Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Case ID</strong></td>
+<td style="text-align: left;"><strong>33</strong> (Replacing Case 5326)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Cohort</strong></td>
+<td style="text-align: left;">Cohort B (Representative Multi-Specialty Surgical)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Procedure &amp; Diagnosis</strong></td>
+<td style="text-align: left;">General Surgery — Hernia repair</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Patient Demographics</strong></td>
+<td style="text-align: left;">Age 47, Non-hypertensive, Non-diabetic</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Recording Duration</strong></td>
+<td style="text-align: left;">1.75 hours (6,317 seconds)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Mandatory Track <code>SNUADC/ECG_II</code></strong></td>
+<td style="text-align: left;"><strong>PRESENT [500 Hz, Verified]</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Mandatory Track <code>SNUADC/PLETH</code></strong></td>
+<td style="text-align: left;"><strong>PRESENT [500 Hz, Verified]</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Mandatory Track <code>Solar8000/PLETH_SPO2</code></strong></td>
+<td style="text-align: left;"><strong>PRESENT [1 Hz, Verified]</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Mandatory Track <code>Solar8000/ST_II</code></strong></td>
+<td style="text-align: left;"><strong>PRESENT [1 Hz, Verified]</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Binary Status</strong></td>
+<td style="text-align: left;">Verified on disk (<code>data/raw/vitaldb_100/33.vital</code>, 5.39 MB)</td>
+</tr>
+</tbody>
+</table>
+<h3>Final Verified 100-Case Dataset Metrics:</h3>
+<ul>
+<li><strong>Total Audited Cases:</strong> <strong>100 cases</strong> (50 Cohort A, 50 Cohort B)</li>
+<li><strong>Total Raw Storage:</strong> <strong>1143.14 MB (1.12 GB)</strong></li>
+<li><strong>Total Surgical Duration:</strong> <strong>286.89 hours</strong> (Mean: 2.87h)</li>
+<li><strong>Total Candidate Sliding Windows:</strong> <strong>15767 windows</strong></li>
+<li><strong>Usable Windows (Passed SQI):</strong> <strong>14420 windows</strong> (91.5%)</li>
+<li><strong>Valid Early-Warning Positive Windows ($y=1$):</strong> <strong>48 windows</strong></li>
+<li><strong>Confirmed Clean Baseline Negative Windows ($y=0$):</strong> <strong>11293 windows</strong></li>
+<li><strong>Class Ratio ($y=1 : y=0$):</strong> <strong>1 : 235.3</strong> (Prevalence: <strong>0.42%</strong>)</li>
+</ul>
+<hr />
+<h2>2. Formal Temporal Architecture &amp; Window Terminology Correction</h2>
+<blockquote>
+<p>[!IMPORTANT]
+<strong>Documentation Correction</strong>: Previous draft reports inadvertently described the sliding windows as 'non-overlapping'. Because the window span is 300 seconds and the advance stride is 60 seconds, each consecutive window shares 240 seconds (80%) of physiological waveform with its predecessor. The correct, precise clinical terminology is:<br />
+<strong>'Overlapping sliding windows with a 60-second stride.'</strong></p>
+</blockquote>
+<pre><code>Temporal Window Architecture (Total Timeline Span = 900 seconds / 15 minutes):
++-----------------------+-----------------------+-----------------------+
+|   T_obs (300 s)       |   T_gap (300 s)       |   T_target (300 s)    |
+|   [t, t + 300)        |   [t + 300, t + 600)  |   [t + 600, t + 900)  |
+|   Model Feature Slice |   Enforced Lead Time  |   Clinical Target     |
++-----------------------+-----------------------+-----------------------+
+      |---&gt; 60s Stride ---&gt; Next Window [t + 60, t + 960)
+</code></pre>
+<h3>Mathematical &amp; Clinical Integrity Rules:</h3>
+<ol>
+<li><strong>Feature Scope</strong>: Features are extracted strictly inside $[t, t + 300)$. Zero data from $t \ge t + 300$ is accessible.</li>
+<li><strong>Lead-Time Guarantee</strong>: A strict 5-minute blank gap ($T_{\text{gap}} = 300\text{ s}$) separates predictor observations from the target horizon.</li>
+<li><strong>Consecutive Run Target Definition</strong>: $y=1$ requires $\text{max_consecutive}(ST_II \le -1.0\text{ mm}) \ge 60\text{ s}$ inside $T_{\text{target}}$, with NO sustained ST depression active during $T_{\text{obs}}$ or $T_{\text{gap}}$.</li>
+</ol>
+<hr />
+<h2>3. Cohort A vs. Cohort B Event Distribution (Leakage &amp; Spectrum Audit)</h2>
+<p>Cohort A (enriched elderly/high-cardiovascular-risk) and Cohort B (representative multi-specialty surgical) exhibit distinct clinical dynamics:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Metric</th>
+<th style="text-align: center;">Cohort A (High-Risk Enriched)</th>
+<th style="text-align: center;">Cohort B (Representative Surgical)</th>
+<th style="text-align: center;">Combined Cohort</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">Total Cases</td>
+<td style="text-align: center;">50</td>
+<td style="text-align: center;">50</td>
+<td style="text-align: center;">100</td>
+</tr>
+<tr>
+<td style="text-align: left;">Positive Cases with Valid Warning Windows</td>
+<td style="text-align: center;"><strong>5 cases</strong></td>
+<td style="text-align: center;"><strong>3 cases</strong></td>
+<td style="text-align: center;"><strong>8 cases</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">Positive Case IDs</td>
+<td style="text-align: center;"><code>[137, 2085, 4236, 4390, 4568]</code></td>
+<td style="text-align: center;"><code>[864, 2172, 3280]</code></td>
+<td style="text-align: center;"><code>[137, 864, 2085, 2172, 3280, 4236, 4390, 4568]</code></td>
+</tr>
+<tr>
+<td style="text-align: left;">Sustained ST Episodes ($\ge 60\text{ s}$)</td>
+<td style="text-align: center;"><strong>23 episodes</strong></td>
+<td style="text-align: center;"><strong>1 episode</strong></td>
+<td style="text-align: center;"><strong>24 episodes</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">Valid 5-Min Early-Warning Positive Windows</td>
+<td style="text-align: center;"><strong>26 windows</strong></td>
+<td style="text-align: center;"><strong>22 windows</strong></td>
+<td style="text-align: center;"><strong>48 windows</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">Confirmed Clean Baseline Negative Windows</td>
+<td style="text-align: center;"><strong>5568 windows</strong></td>
+<td style="text-align: center;"><strong>5725 windows</strong></td>
+<td style="text-align: center;"><strong>11293 windows</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">Class Prevalence ($y=1 / (y=1 + y=0)$)</td>
+<td style="text-align: center;"><strong>0.46%</strong></td>
+<td style="text-align: center;"><strong>0.39%</strong></td>
+<td style="text-align: center;"><strong>0.42%</strong></td>
+</tr>
+</tbody>
+</table>
+<h3>Clinical Interpretation:</h3>
+<ul>
+<li><strong>Cohort A (Enriched)</strong> concentrated 23 sustained ST episodes across 5 patients, confirming that high-risk demographic selection successfully captures severe ischemic events.</li>
+<li><strong>Cohort B (Representative)</strong> provided 1 confirmed sustained episode (Case 864) and multiple impending episodes that emerged inside $T_{\text{target}}$ (Cases 2172 and 3280), proving that early warning opportunities exist even in unselected surgical cohorts while providing abundant clean negative controls.</li>
+<li><strong>No Cohort Leakage</strong>: Cohort identifiers are strictly preserved to enable subgroup validation.</li>
+</ul>
+<hr />
+<h2>4. Subject-Level 70/15/15 Split Simulation (20 Independent Runs)</h2>
+<p>To simulate prospective model development, 20 independent subject-level 70% Train / 15% Validation / 15% Test splits were executed using fixed random seeds. Grouping is strictly by <code>caseid</code> (0% patient overlap across partitions):</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">Sim #</th>
+<th style="text-align: center;">Seed</th>
+<th style="text-align: center;">Train Cases (Pos/Tot)</th>
+<th style="text-align: center;">Val Cases (Pos/Tot)</th>
+<th style="text-align: center;">Test Cases (Pos/Tot)</th>
+<th style="text-align: center;">Pos Windows (Tr/Val/Te)</th>
+<th style="text-align: center;">Neg Windows (Tr/Val/Te)</th>
+<th style="text-align: left;">Test Positive Case IDs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;">01</td>
+<td style="text-align: center;">2057</td>
+<td style="text-align: center;">5/70</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">2/15</td>
+<td style="text-align: center;">29 / 5 / 14</td>
+<td style="text-align: center;">8495 / 1307 / 1491</td>
+<td style="text-align: left;"><code>[np.int64(3280), np.int64(4390)]</code></td>
+</tr>
+<tr>
+<td style="text-align: center;">02</td>
+<td style="text-align: center;">2088</td>
+<td style="text-align: center;">6/70</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">37 / 6 / 5</td>
+<td style="text-align: center;">8241 / 1558 / 1494</td>
+<td style="text-align: left;"><code>[np.int64(864)]</code></td>
+</tr>
+<tr>
+<td style="text-align: center;">03</td>
+<td style="text-align: center;">2119</td>
+<td style="text-align: center;">5/70</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">2/15</td>
+<td style="text-align: center;">30 / 5 / 13</td>
+<td style="text-align: center;">8413 / 1437 / 1443</td>
+<td style="text-align: left;"><code>[np.int64(137), np.int64(4390)]</code></td>
+</tr>
+<tr>
+<td style="text-align: center;">04</td>
+<td style="text-align: center;">2150</td>
+<td style="text-align: center;">6/70</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">41 / 5 / 2</td>
+<td style="text-align: center;">7914 / 1810 / 1569</td>
+<td style="text-align: left;"><code>[np.int64(2085)]</code></td>
+</tr>
+<tr>
+<td style="text-align: center;">05</td>
+<td style="text-align: center;">2181</td>
+<td style="text-align: center;">5/70</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">2/15</td>
+<td style="text-align: center;">32 / 5 / 11</td>
+<td style="text-align: center;">8136 / 1503 / 1654</td>
+<td style="text-align: left;"><code>[np.int64(2085), np.int64(3280)]</code></td>
+</tr>
+<tr>
+<td style="text-align: center;">06</td>
+<td style="text-align: center;">2212</td>
+<td style="text-align: center;">6/70</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">35 / 8 / 5</td>
+<td style="text-align: center;">7399 / 1685 / 2209</td>
+<td style="text-align: left;"><code>[np.int64(864)]</code></td>
+</tr>
+<tr>
+<td style="text-align: center;">07</td>
+<td style="text-align: center;">2243</td>
+<td style="text-align: center;">5/70</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">2/15</td>
+<td style="text-align: center;">28 / 5 / 15</td>
+<td style="text-align: center;">7462 / 1811 / 2020</td>
+<td style="text-align: left;"><code>[np.int64(3280), np.int64(4236)]</code></td>
+</tr>
+<tr>
+<td style="text-align: center;">08</td>
+<td style="text-align: center;">2274</td>
+<td style="text-align: center;">6/70</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">37 / 5 / 6</td>
+<td style="text-align: center;">7040 / 2162 / 2091</td>
+<td style="text-align: left;"><code>[np.int64(4236)]</code></td>
+</tr>
+<tr>
+<td style="text-align: center;">09</td>
+<td style="text-align: center;">2305</td>
+<td style="text-align: center;">5/70</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">2/15</td>
+<td style="text-align: center;">32 / 5 / 11</td>
+<td style="text-align: center;">8112 / 1630 / 1551</td>
+<td style="text-align: left;"><code>[np.int64(2085), np.int64(3280)]</code></td>
+</tr>
+<tr>
+<td style="text-align: center;">10</td>
+<td style="text-align: center;">2336</td>
+<td style="text-align: center;">6/70</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">37 / 5 / 6</td>
+<td style="text-align: center;">7892 / 1672 / 1729</td>
+<td style="text-align: left;"><code>[np.int64(4236)]</code></td>
+</tr>
+<tr>
+<td style="text-align: center;">11</td>
+<td style="text-align: center;">2367</td>
+<td style="text-align: center;">5/70</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">2/15</td>
+<td style="text-align: center;">29 / 2 / 17</td>
+<td style="text-align: center;">8378 / 1505 / 1410</td>
+<td style="text-align: left;"><code>[np.int64(137), np.int64(3280)]</code></td>
+</tr>
+<tr>
+<td style="text-align: center;">12</td>
+<td style="text-align: center;">2398</td>
+<td style="text-align: center;">6/70</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">35 / 5 / 8</td>
+<td style="text-align: center;">7808 / 1672 / 1813</td>
+<td style="text-align: left;"><code>[np.int64(2172)]</code></td>
+</tr>
+<tr>
+<td style="text-align: center;">13</td>
+<td style="text-align: center;">2429</td>
+<td style="text-align: center;">5/70</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">2/15</td>
+<td style="text-align: center;">28 / 5 / 15</td>
+<td style="text-align: center;">7128 / 2045 / 2120</td>
+<td style="text-align: left;"><code>[np.int64(3280), np.int64(4236)]</code></td>
+</tr>
+<tr>
+<td style="text-align: center;">14</td>
+<td style="text-align: center;">2460</td>
+<td style="text-align: center;">6/70</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">31 / 9 / 8</td>
+<td style="text-align: center;">7203 / 1803 / 2287</td>
+<td style="text-align: left;"><code>[np.int64(2172)]</code></td>
+</tr>
+<tr>
+<td style="text-align: center;">15</td>
+<td style="text-align: center;">2491</td>
+<td style="text-align: center;">5/70</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">2/15</td>
+<td style="text-align: center;">33 / 2 / 13</td>
+<td style="text-align: center;">7559 / 1806 / 1928</td>
+<td style="text-align: left;"><code>[np.int64(2172), np.int64(4568)]</code></td>
+</tr>
+<tr>
+<td style="text-align: center;">16</td>
+<td style="text-align: center;">2522</td>
+<td style="text-align: center;">6/70</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">35 / 8 / 5</td>
+<td style="text-align: center;">7378 / 2028 / 1887</td>
+<td style="text-align: left;"><code>[np.int64(4390)]</code></td>
+</tr>
+<tr>
+<td style="text-align: center;">17</td>
+<td style="text-align: center;">2553</td>
+<td style="text-align: center;">5/70</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">2/15</td>
+<td style="text-align: center;">28 / 5 / 15</td>
+<td style="text-align: center;">7559 / 1620 / 2114</td>
+<td style="text-align: left;"><code>[np.int64(3280), np.int64(4236)]</code></td>
+</tr>
+<tr>
+<td style="text-align: center;">18</td>
+<td style="text-align: center;">2584</td>
+<td style="text-align: center;">6/70</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">34 / 5 / 9</td>
+<td style="text-align: center;">7968 / 1017 / 2308</td>
+<td style="text-align: left;"><code>[np.int64(3280)]</code></td>
+</tr>
+<tr>
+<td style="text-align: center;">19</td>
+<td style="text-align: center;">2615</td>
+<td style="text-align: center;">5/70</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">2/15</td>
+<td style="text-align: center;">32 / 5 / 11</td>
+<td style="text-align: center;">7450 / 2046 / 1797</td>
+<td style="text-align: left;"><code>[np.int64(4236), np.int64(4390)]</code></td>
+</tr>
+<tr>
+<td style="text-align: center;">20</td>
+<td style="text-align: center;">2646</td>
+<td style="text-align: center;">6/70</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">1/15</td>
+<td style="text-align: center;">38 / 8 / 2</td>
+<td style="text-align: center;">7803 / 1815 / 1675</td>
+<td style="text-align: left;"><code>[np.int64(2085)]</code></td>
+</tr>
+</tbody>
+</table>
+<h3>Split Simulation Summary Statistics:</h3>
+<ul>
+<li><strong>Test Set Positive Cases:</strong> Mean = <strong>1.50 cases</strong> (Min: 1, Max: 2)</li>
+<li><strong>Validation Set Positive Cases:</strong> Mean = <strong>1.00 cases</strong> (Min: 1, Max: 1)</li>
+<li><strong>Test Set Positive Windows:</strong> Mean = <strong>9.6 windows</strong> (Min: <strong>2</strong>, Max: <strong>17</strong>)</li>
+</ul>
+<hr />
+<h2>5. Statistical Viability Assessment: Is a Single 70/15/15 Split Defensible?</h2>
+<blockquote>
+<p>[!WARNING]
+<strong>HIGH STATISTICAL UNCERTAINTY IN A SINGLE 15% TEST PARTITION</strong>:
+1. <strong>Extreme Case-Level Sparsity</strong>: With only 8 positive patients across the entire 100-case cohort, a 15% partition (15 cases) contains only <strong>1 to 2 positive patients</strong>.
+2. <strong>Sensitivity Volatility</strong>: If a model correctly flags 1 of 2 test patients, patient-level sensitivity is <strong>50%</strong>. If it misses that 1 patient, sensitivity plunges to <strong>0%</strong>. If there is only 1 positive patient in the test set, sensitivity is binary (<strong>100% or 0%</strong>). Such metrics are clinically uninterpretable and fail to demonstrate robust generalization.
+3. <strong>Window Count Instability</strong>: Because different patients have differing numbers of early-warning opportunities (e.g. Case 2085 has 2 positive windows, while Case 3280 has 9 windows), the test partition positive window count fluctuates between <strong>5 and 17 windows</strong> purely based on random seed selection.
+4. <strong>Rigorous Conclusion</strong>: A single, static 70/15/15 train/validation/test split is <strong>statistically fragile</strong> for model selection and threshold calibration. Relying solely on a single 15-case test set would produce unacceptably noisy performance benchmarks.</p>
+</blockquote>
+<hr />
+<h2>6. Grouped 5-Fold Cross-Validation Feasibility Audit</h2>
+<p>To evaluate a more robust alternative, <code>StratifiedGroupKFold</code> (5 folds) was simulated across the cohort:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">Fold</th>
+<th style="text-align: center;">Train Cases (Pos/Tot)</th>
+<th style="text-align: center;">Val Cases (Pos/Tot)</th>
+<th style="text-align: left;">Val Positive Cases</th>
+<th style="text-align: center;">Pos Windows (Tr/Val)</th>
+<th style="text-align: center;">Neg Windows (Tr/Val)</th>
+<th style="text-align: center;">Val Pos Prevalence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;"><strong>Fold 1</strong></td>
+<td style="text-align: center;">6/78</td>
+<td style="text-align: center;">2/20</td>
+<td style="text-align: left;"><code>[137, 4390]</code></td>
+<td style="text-align: center;">35 / 13</td>
+<td style="text-align: center;">9034 / 2259</td>
+<td style="text-align: center;">0.57%</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>Fold 2</strong></td>
+<td style="text-align: center;">7/78</td>
+<td style="text-align: center;">1/20</td>
+<td style="text-align: left;"><code>[2172]</code></td>
+<td style="text-align: center;">40 / 8</td>
+<td style="text-align: center;">9035 / 2258</td>
+<td style="text-align: center;">0.35%</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>Fold 3</strong></td>
+<td style="text-align: center;">6/79</td>
+<td style="text-align: center;">2/19</td>
+<td style="text-align: left;"><code>[864, 2085]</code></td>
+<td style="text-align: center;">41 / 7</td>
+<td style="text-align: center;">9032 / 2261</td>
+<td style="text-align: center;">0.31%</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>Fold 4</strong></td>
+<td style="text-align: center;">6/77</td>
+<td style="text-align: center;">2/21</td>
+<td style="text-align: left;"><code>[4236, 4568]</code></td>
+<td style="text-align: center;">37 / 11</td>
+<td style="text-align: center;">9036 / 2257</td>
+<td style="text-align: center;">0.49%</td>
+</tr>
+<tr>
+<td style="text-align: center;"><strong>Fold 5</strong></td>
+<td style="text-align: center;">7/80</td>
+<td style="text-align: center;">1/18</td>
+<td style="text-align: left;"><code>[3280]</code></td>
+<td style="text-align: center;">39 / 9</td>
+<td style="text-align: center;">9035 / 2258</td>
+<td style="text-align: center;">0.40%</td>
+</tr>
+</tbody>
+</table>
+<h3>Scientific Advantages of Grouped 5-Fold Cross-Validation:</h3>
+<ol>
+<li><strong>Complete Cohort Evaluation</strong>: In 5-fold CV, <strong>all 8 positive cases (and all 48 positive windows)</strong> are evaluated in out-of-fold validation. No positive case is locked away uninspected.</li>
+<li><strong>Strict Patient Isolation</strong>: In every fold, training and validation sets are strictly disjoint at the patient level ($  ext{Train Cases} \cap   ext{Val Cases} = \emptyset$). Zero window leakage can occur.</li>
+<li><strong>Pooled Out-of-Fold Estimation</strong>: Out-of-fold predictions from all 5 folds can be aggregated to compute cohort-wide PR-AUC, AUROC, and Brier calibration scores across all 100 patients, yielding substantially narrower confidence intervals.</li>
+</ol>
+<hr />
+<h2>7. Recommended Locked Test Set Strategy</h2>
+<p>To balance unbiased final benchmark testing with maximal development-time stability, the following <strong>two-tier architecture</strong> is recommended:</p>
+<ol>
+<li><strong>Tier 1 — Development Set (80 Cases, 5-Fold Grouped CV)</strong>:
+   - 80 cases (40 Cohort A, 40 Cohort B) containing 6 positive cases and 74 negative cases.
+   - Dedicated to feature selection, architecture comparison (Matrix A vs Matrix B), hyperparameter tuning, and decision threshold calibration via 5-fold <code>StratifiedGroupKFold</code>.</li>
+<li><strong>Tier 2 — Locked Benchmark Test Set (20 Cases, Sealed)</strong>:
+   - 20 cases (10 Cohort A, 10 Cohort B) containing exactly <strong>2 stratified positive cases</strong> (1 from Cohort A, 1 from Cohort B) and 18 negative cases.
+   - <strong>Completely Sealed</strong>: Never accessed during preprocessing decisions, feature pruning, model selection, or hyperparameter optimization.
+   - Evaluated exactly <strong>once</strong> at the conclusion of modeling to verify generalization to unseen patients.</li>
+</ol>
+<hr />
+<h2>8. Feature Matrix Temporal Independence Audit</h2>
+<p>Every candidate feature in the preprocessing matrix was audited to confirm exclusive generation from $T_{\text{obs}}$ ($t \in [0, 300\text{ s})$):</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Modality</th>
+<th style="text-align: left;">Feature Names</th>
+<th style="text-align: center;">Window Extracted</th>
+<th style="text-align: center;">Future / Gap Contamination</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>ECG R-Peak &amp; HRV</strong></td>
+<td style="text-align: left;"><code>ecg_hr_mean</code>, <code>ecg_hr_std</code>, <code>ecg_rr_sdnn</code>, <code>ecg_rr_rmssd</code>, <code>ecg_pnn50</code></td>
+<td style="text-align: center;">$T_{\text{obs}}$ only</td>
+<td style="text-align: center;"><strong>ZERO [VERIFIED]</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>ECG Morphology</strong></td>
+<td style="text-align: left;"><code>ecg_r_amp_mv</code>, <code>ecg_qrs_width_ms</code>, <code>ecg_sqi</code></td>
+<td style="text-align: center;">$T_{\text{obs}}$ only</td>
+<td style="text-align: center;"><strong>ZERO [VERIFIED]</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Pulse Arrival Time</strong></td>
+<td style="text-align: left;"><code>pat_median_ms</code>, <code>pat_iqr_ms</code>, <code>pat_valid_fraction</code>, <code>pat_valid</code></td>
+<td style="text-align: center;">$T_{\text{obs}}$ only</td>
+<td style="text-align: center;"><strong>ZERO [VERIFIED]</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>PPG Waveform</strong></td>
+<td style="text-align: left;"><code>ppg_pulse_amp</code>, <code>ppg_perfusion_index</code>, <code>ppg_crest_time_ms</code>, <code>ppg_sqi</code></td>
+<td style="text-align: center;">$T_{\text{obs}}$ only</td>
+<td style="text-align: center;"><strong>ZERO [VERIFIED]</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>SpO2 Trend</strong></td>
+<td style="text-align: left;"><code>spo2_mean</code>, <code>spo2_min</code>, <code>spo2_std</code>, <code>spo2_desat_count</code></td>
+<td style="text-align: center;">$T_{\text{obs}}$ only</td>
+<td style="text-align: center;"><strong>ZERO [VERIFIED]</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Pre-Event ST</strong></td>
+<td style="text-align: left;"><code>st_obs_mean</code>, <code>st_obs_median</code>, <code>st_obs_min</code>, <code>st_obs_std</code>, <code>st_slope_mm_min</code></td>
+<td style="text-align: center;">$T_{\text{obs}}$ only</td>
+<td style="text-align: center;"><strong>ZERO [VERIFIED]</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Baseline-Relative ST</strong></td>
+<td style="text-align: left;"><code>st_delta_baseline</code> (difference from initial stable baseline)</td>
+<td style="text-align: center;">$T_{\text{obs}}$ vs baseline</td>
+<td style="text-align: center;"><strong>ZERO [VERIFIED]</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Confirmed: <strong>Zero features access $T_{\text{gap}}$, $T_{\text{target}}$, post-event intervals, or target labels.</strong></p>
+<hr />
+<h2>9. Dual Modeling Matrix Specifications (Ablation Study Ready)</h2>
+<p>Two distinct feature matrix specifications are established for future ablation benchmarking:</p>
+<h3>Model Matrix A (Full Multimodal + Pre-Event ST)</h3>
+<ul>
+<li><strong>Input Modalities:</strong> ECG Lead II, PPG Plethysmogram / PAT, SpO2 Trend, Pre-Event ST Lead II</li>
+<li><strong>Feature Count:</strong> <strong>26 features</strong></li>
+<li><strong>Features:</strong> <code>['ecg_hr_mean', 'ecg_hr_std', 'ecg_rr_sdnn', 'ecg_rr_rmssd', 'ecg_pnn50', 'ecg_r_amp_mv', 'ecg_qrs_width_ms', 'ecg_sqi', 'pat_median_ms', 'pat_iqr_ms', 'pat_valid_fraction', 'pat_valid', 'ppg_pulse_amp', 'ppg_perfusion_index', 'ppg_crest_time_ms', 'ppg_sqi', 'spo2_mean', 'spo2_min', 'spo2_std', 'spo2_desat_count', 'st_obs_mean', 'st_obs_median', 'st_obs_min', 'st_obs_std', 'st_delta_baseline', 'st_slope_mm_min']</code></li>
+<li><strong>Scientific Hypothesis:</strong> Comprehensive multimodal representation combining autonomic/vascular transit timing with pre-event electrophysiological micro-shifts.</li>
+</ul>
+<h3>Model Matrix B (Pure Non-ST Vascular / Autonomic)</h3>
+<ul>
+<li><strong>Input Modalities:</strong> ECG Lead II, PPG Plethysmogram / PAT, SpO2 Trend</li>
+<li><strong>Feature Count:</strong> <strong>20 features</strong></li>
+<li><strong>Features:</strong> <code>['ecg_hr_mean', 'ecg_hr_std', 'ecg_rr_sdnn', 'ecg_rr_rmssd', 'ecg_pnn50', 'ecg_r_amp_mv', 'ecg_qrs_width_ms', 'ecg_sqi', 'pat_median_ms', 'pat_iqr_ms', 'pat_valid_fraction', 'pat_valid', 'ppg_pulse_amp', 'ppg_perfusion_index', 'ppg_crest_time_ms', 'ppg_sqi', 'spo2_mean', 'spo2_min', 'spo2_std', 'spo2_desat_count']</code></li>
+<li><strong>Scientific Hypothesis:</strong> Scientific ablation model determining whether pulse arrival time (PAT), heart rate variability (HRV), and pulse morphology can predict impending ischemia WITHOUT any ST segment information.</li>
+</ul>
+<hr />
+<h2>10. Audit Summary &amp; Checklist</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Audit Requirement</th>
+<th style="text-align: center;">Status</th>
+<th style="text-align: left;">Verification Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">100th Case Validation (Case 33)</td>
+<td style="text-align: center;"><strong>VERIFIED</strong></td>
+<td style="text-align: left;">Replaced defective Case 5326; all 4 mandatory tracks present</td>
+</tr>
+<tr>
+<td style="text-align: left;">Overlapping Window Documentation</td>
+<td style="text-align: center;"><strong>VERIFIED</strong></td>
+<td style="text-align: left;">Corrected to 'overlapping sliding windows with 60s stride'</td>
+</tr>
+<tr>
+<td style="text-align: left;">20 Grouped Split Simulations</td>
+<td style="text-align: center;"><strong>VERIFIED</strong></td>
+<td style="text-align: left;">Strict case-level isolation maintained (0 patient overlap)</td>
+</tr>
+<tr>
+<td style="text-align: left;">70/15/15 Viability Evaluated</td>
+<td style="text-align: center;"><strong>VERIFIED</strong></td>
+<td style="text-align: left;">High statistical uncertainty on single test set documented</td>
+</tr>
+<tr>
+<td style="text-align: left;">5-Fold Grouped CV Evaluated</td>
+<td style="text-align: center;"><strong>VERIFIED</strong></td>
+<td style="text-align: left;">StratifiedGroupKFold validated across all 8 positive cases</td>
+</tr>
+<tr>
+<td style="text-align: left;">Cohort Leakage Prevented</td>
+<td style="text-align: center;"><strong>VERIFIED</strong></td>
+<td style="text-align: left;">Cohort A and B event breakdowns audited independently</td>
+</tr>
+<tr>
+<td style="text-align: left;">Locked Test Set Strategy</td>
+<td style="text-align: center;"><strong>VERIFIED</strong></td>
+<td style="text-align: left;">Recommended 80-case CV dev set + 20-case locked benchmark</td>
+</tr>
+<tr>
+<td style="text-align: left;">Feature Matrix Isolation</td>
+<td style="text-align: center;"><strong>VERIFIED</strong></td>
+<td style="text-align: left;">All features confirmed strictly within T_obs</td>
+</tr>
+<tr>
+<td style="text-align: left;">Model Matrices A &amp; B Specified</td>
+<td style="text-align: center;"><strong>VERIFIED</strong></td>
+<td style="text-align: left;">Full Multimodal (26 feats) vs Pure Non-ST (20 feats)</td>
+</tr>
+<tr>
+<td style="text-align: left;">Machine Learning Models Trained</td>
+<td style="text-align: center;"><strong>ZERO</strong></td>
+<td style="text-align: left;">Halted awaiting explicit human authorization</td>
+</tr>
+<tr>
+<td style="text-align: left;">BeatAhead Website Modified</td>
+<td style="text-align: center;"><strong>ZERO</strong></td>
+<td style="text-align: left;">Web application remains completely untouched</td>
+</tr>
+</tbody>
+</table>
+<h3>Recommended Next Action</h3>
+<p>Present this split audit for human review. Once authorized, proceed to Phase 5 modeling using <strong>5-fold StratifiedGroupKFold cross-validation on an 80-case development cohort plus a locked 20-case test set</strong>, benchmarking Model Matrix A against Model Matrix B.</p>
+</body>
+</html>

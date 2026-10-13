@@ -1,0 +1,20 @@
+# BeatAhead ML Container .dockerignore
+.git/
+.gitignore
+.venv/
+data/
+reports/
+scratch/
+tests/
+figures/
+docs/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+*.md
+*.pdf
+*.png
+.env*

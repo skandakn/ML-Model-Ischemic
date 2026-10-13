@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>BeatAhead Implementation Document</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; line-height: 1.55; font-size: 10.5pt; margin: 0; }
+  h1 { font-size: 18pt; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 6px; page-break-after: avoid; }
+  h2 { font-size: 13pt; color: #1e3a8a; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-top: 22px; page-break-after: avoid; }
+  h3 { font-size: 11pt; color: #1d4ed8; margin-top: 16px; page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 8.5pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background-color: #0f2b48; color: #ffffff; }
+  tr:nth-child(even) { background-color: #f8fafc; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background-color: #f1f5f9; padding: 2px 4px; }
+  pre { background-color: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 6px; font-size: 8pt; line-height: 1.35; page-break-inside: avoid; }
+  blockquote { margin: 10px 0; padding: 8px 14px; background-color: #eff6ff; border-left: 4px solid #3b82f6; color: #1e40af; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>BeatAhead Phase 10: End-to-End Validation &amp; Demo Hardening Report</h1>
+<p><strong>Status</strong>: Verified &amp; Frozen<br />
+<strong>Date</strong>: September 2026<br />
+<strong>Repository</strong>: <code>C:\ischemic</code> (Branch: <code>staging-ml-integration</code>) &amp; <code>c:\ML Model - Ischemic</code><br />
+<strong>Model Dependency</strong>: Frozen Phase 5 XGBoost Matrix A (<code>models/beatahead_phase5_model.joblib</code>)<br />
+<strong>Decision Threshold</strong>: <code>0.156742</code> (Immutable, Derived from Validation Fold $F_1$ Maximization)<br />
+<strong>Schema</strong>: 26-Feature Matrix A (<code>models/feature_schema.json</code>)<br />
+<strong>Test Harness Pass Rate</strong>: 53 / 53 Tests Passing (100%)  </p>
+<hr />
+<h2>Executive Summary</h2>
+<p>Phase 10 completes the comprehensive end-to-end validation, safety audit, and demonstration hardening of the BeatAhead staging platform (<code>C:\ischemic</code> integrated with the frozen machine learning inference engine). Every layer of the multi-stage architecture—from streaming physiological inputs, signal quality evaluation, 26-feature vector construction, in-process and service-level ML prediction, threshold evaluation, sigmoidal evidence scaling, adaptive baseline tracking with anti-drift locking, multi-source ISI calculation, to UI visualization—was rigorously evaluated across deterministic test matrices, degraded sensor modes, and edge conditions.</p>
+<p>All strict governance constraints were maintained:
+- <strong>Zero Model Modification</strong>: The frozen XGBoost binary (<code>beatahead_phase5_model.joblib</code>), 26-feature schema, and operating threshold (<code>0.156742</code>) remain strictly unmodified.
+- <strong>Architectural Separation</strong>: The binary machine learning inference state (<code>model_alert_state</code>) is strictly decoupled from the continuous product display score (<code>isi_score</code>). The formula $\text{ISI} = p_{\text{model}} \times 100$ is completely absent.
+- <strong>53/53 Automated Tests Passed</strong>: 11 unit inference tests, 14 staging integration tests, 18 ISI engine tests, and 10 end-to-end pipeline/transition tests passed with 0 errors.
+- <strong>Explainability &amp; Security Verified</strong>: Zero prohibited diagnostic assertions were identified across the frontend, zero model artifacts or binaries are exposed in client bundles or public directories, and all API errors suppress internal server paths and stack traces.
+- <strong>Production Build Clean</strong>: Next.js production compilation succeeded across all 37 static and dynamic application routes.</p>
+<hr />
+<h2>1. Complete Architecture Trace</h2>
+<p>A validated, single-window physiological feature payload was traced sequentially through the end-to-end processing pipeline:</p>
+<pre><code>[ Raw Multi-Channel Physiological Stream ]
+  (Lead II ECG, Fingertip PPG, Accelerometry, Pulse Arrival Time)
+                    │
+                    ▼
+[ Signal Quality Gate (Q_overall) ]
+  Q_overall = 0.40*Q_ppg + 0.35*Q_ecg + 0.25*(1 - Motion) = 0.9375 &gt;= 0.35 (PASS)
+                    │
+                    ▼
+[ 26-Feature Matrix A Construction ]
+  Verified canonical naming and strict ordering:
+  ['ecg_hr_mean', 'ecg_hr_std', ..., 'st_delta_baseline'] (Length: 26)
+                    │
+                    ▼
+[ ML Inference Engine Boundary ]
+  Input validation: Schema check, NaN/Inf rejection, physiological bounds check
+                    │
+                    ▼
+[ XGBoost Model Evaluation ]
+  Continuous Model Probability: p_model = 0.008398
+                    │
+                    ▼
+[ Operating Threshold Evaluation ]
+  Decision Threshold: tau = 0.156742 (Immutable)
+  p_model (0.008398) &lt; tau (0.156742) --&gt; Binary Alert State: NORMAL (False)
+                    │
+                    ▼
+[ Piecewise Sigmoidal Evidence Transform (E_model) ]
+  k1 = 2.5, tau = 0.156742 --&gt; E_model = 0.0682
+                    │
+                    ▼
+[ Personal Baseline Tracker (t &gt;= 600s) ]
+  HR_base = 70.0 bpm, RMSSD_base = 40.0 ms, SpO2_base = 98.0%, PAT_base = 220.0 ms
+                    │
+                    ▼
+[ Physiological Strain Computation ]
+  Autonomic Strain: D_auto = 0.60*Delta_HR + 0.40*Delta_RMSSD = 0.0600
+  Perfusion Strain: D_perf = 0.70*Delta_SpO2 + 0.30*Delta_PAT = 0.0000
+  Trend Momentum:   M_trend = 0.0031 in [-0.15, +0.15]
+                    │
+                    ▼
+[ Composite Product Layer (ISI) ]
+  ISI_raw = 40.0 + [ 0.45*(0.0682 - 0.20) + 0.30*(0.0600) + 0.25*(0.0) + 0.0031 ] * 60.0
+  ISI_raw = 37.74 --&gt; Clamped ISI: 37.74 / 100.0
+                    │
+                    ▼
+[ Product State Machine Controller ]
+  Signal Quality: PASS | Baseline: ESTABLISHED | Model: NORMAL | Trend: LOW
+  Assigned Product State: &quot;Normal / Stable&quot;
+                    │
+                    ▼
+[ Frontend Presentation Layer ]
+  - ISIGauge: Renders 37.74 / 100 (Green/Normal) + Decoupled Model Readout (&quot;NORMAL, Evidence: 6.8%&quot;)
+  - RiskTrendBanner: &quot;Normal / Stable&quot; + Non-diagnostic physiological guidance
+  - ContributionBars: Visualizes relative drivers (Evidence, Autonomic, Perfusion, HRV, Motion)
+</code></pre>
+<h3>Trace Invariant Verification</h3>
+<ol>
+<li><strong>Canonical Ordering</strong>: All 26 features preserve their exact frozen index order matching <code>models/feature_schema.json</code>.</li>
+<li><strong>Zero Missing or Dropped Features</strong>: Every feature is strictly validated; zero silent imputation occurs.</li>
+<li><strong>Probability Preservation</strong>: $p_{\text{model}} = 0.008398$ is passed without rounding or truncation to the evidence layer.</li>
+<li><strong>Decoupled Scaling</strong>: At $p = 0.008398$, naive scaling would produce $\text{ISI} = 0.84$. The true composite product index is $37.74$, capturing baseline autonomic tone.</li>
+<li><strong>State Separation</strong>: Model state (<code>NORMAL</code>) and Product state (<code>Normal / Stable</code>) remain discrete attributes.</li>
+</ol>
+<hr />
+<h2>2. Five Deterministic End-to-End Scenarios</h2>
+<p>Five standardized physiological profiles were evaluated through the complete staging harness (<code>tests/test_end_to_end_validation.py</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Physiological Inputs</th>
+<th style="text-align: center;">Model Probability ($p$)</th>
+<th style="text-align: center;">Model Alert State</th>
+<th style="text-align: center;">Signal Quality ($Q$)</th>
+<th>Product State</th>
+<th style="text-align: center;">Composite ISI</th>
+<th style="text-align: center;">Verification Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>A. Normal / Stable</strong></td>
+<td>Resting HR (70 bpm), normal RMSSD (40 ms), SpO2 98%, clean ECG/PPG</td>
+<td style="text-align: center;">$0.0200 &lt; \tau$</td>
+<td style="text-align: center;"><strong>NORMAL</strong></td>
+<td style="text-align: center;">$0.93$ (Clean)</td>
+<td><code>Normal / Stable</code></td>
+<td style="text-align: center;"><strong>34.82</strong></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>B. Elevated Evidence</strong></td>
+<td>Pre-event ST sagging, moderate autonomic response, clean signals</td>
+<td style="text-align: center;">$0.2500 \ge \tau$</td>
+<td style="text-align: center;"><strong>ALERT</strong></td>
+<td style="text-align: center;">$0.88$ (Clean)</td>
+<td><code>Elevated Model Evidence</code></td>
+<td style="text-align: center;"><strong>64.21</strong></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>C. Elevated Trend</strong></td>
+<td>Rising HR (+25 bpm), RMSSD drop (-70%), SpO2 desat, rising 5-min slope</td>
+<td style="text-align: center;">$0.1000 &lt; \tau$</td>
+<td style="text-align: center;"><strong>NORMAL</strong></td>
+<td style="text-align: center;">$0.88$ (Clean)</td>
+<td><code>Elevated ISI Trend</code></td>
+<td style="text-align: center;"><strong>67.45</strong></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>D. Insufficient Signal</strong></td>
+<td>Severe patient motion ($0.80$), optical sensor detachment, low SQI</td>
+<td style="text-align: center;">$0.5000 \ge \tau$</td>
+<td style="text-align: center;"><strong>ALERT</strong></td>
+<td style="text-align: center;">$0.20 &lt; 0.35$</td>
+<td><code>Insufficient Signal Quality</code></td>
+<td style="text-align: center;">Suppressed / Safe</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>E. Baseline Establishing</strong></td>
+<td>Monitoring elapsed time $300\text{ s} &lt; 600\text{ s}$, normal vitals</td>
+<td style="text-align: center;">$0.0500 &lt; \tau$</td>
+<td style="text-align: center;"><strong>NORMAL</strong></td>
+<td style="text-align: center;">$0.95$ (Clean)</td>
+<td><code>Baseline Establishing</code></td>
+<td style="text-align: center;"><strong>35.10</strong></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>3. Threshold Boundary Continuity &amp; Switching</h2>
+<p>To confirm mathematical robustness at the operating boundary $\tau = 0.156742$, the pipeline was evaluated at micro-intervals across the decision threshold:</p>
+<table>
+<thead>
+<tr>
+<th>Probability ($p$)</th>
+<th style="text-align: center;">Model Evidence ($E_{\text{model}}$)</th>
+<th style="text-align: center;">$\Delta E$ from Midpoint</th>
+<th style="text-align: center;">Model Alert State</th>
+<th>Product State</th>
+<th style="text-align: center;">Continuity Verified</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>$p = 0.156741$ ($\tau - 10^{-6}$)</td>
+<td style="text-align: center;">$0.499999$</td>
+<td style="text-align: center;">$-0.000001$</td>
+<td style="text-align: center;"><strong>NORMAL</strong> (<code>False</code>)</td>
+<td><code>Normal / Stable</code></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td>$p = 0.156742$ ($\tau$)</td>
+<td style="text-align: center;"><strong>$0.500000$</strong></td>
+<td style="text-align: center;"><strong>$0.000000$</strong></td>
+<td style="text-align: center;"><strong>ALERT</strong> (<code>True</code>)</td>
+<td><code>Elevated Model Evidence</code></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td>$p = 0.156743$ ($\tau + 10^{-6}$)</td>
+<td style="text-align: center;">$0.500006$</td>
+<td style="text-align: center;">$+0.000006$</td>
+<td style="text-align: center;"><strong>ALERT</strong> (<code>True</code>)</td>
+<td><code>Elevated Model Evidence</code></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+</tbody>
+</table>
+<h3>Boundary Observations:</h3>
+<ul>
+<li><strong>Zero Discontinuity</strong>: Evidence scaling is continuous across $\tau$ ($\lim_{p \to \tau^-} E(p) = \lim_{p \to \tau^+} E(p) = 0.500000$).</li>
+<li><strong>Sharp Binary Decision</strong>: The discrete alert flag switches cleanly from <code>NORMAL</code> to <code>ALERT</code> at exactly $p \ge 0.156742$.</li>
+<li><strong>Zero Score Jumps</strong>: The composite ISI score transitions smoothly with $|\Delta \text{ISI}| &lt; 0.001$, preventing flickering in UI gauges.</li>
+</ul>
+<hr />
+<h2>4. Degraded Sensor Modes &amp; Data Quality Failures</h2>
+<p>The system was stressed against sensor failure patterns:</p>
+<table>
+<thead>
+<tr>
+<th>Failure Mode</th>
+<th>Injected Fault</th>
+<th>System Response</th>
+<th style="text-align: center;">Fail-Safe Verified</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Invalid PAT Transit</strong></td>
+<td><code>pat_valid = 0</code>, <code>pat_median_ms = 0</code></td>
+<td>Perfusion strain calculates exclusively from SpO2; score remains numerical and bounded.</td>
+<td style="text-align: center;"><strong>YES</strong></td>
+</tr>
+<tr>
+<td><strong>Missing SpO2</strong></td>
+<td>SpO2 = null / missing in client stream</td>
+<td>Imputes zero desaturation deviation; non-crashing calculation.</td>
+<td style="text-align: center;"><strong>YES</strong></td>
+</tr>
+<tr>
+<td><strong>High Motion Artifact</strong></td>
+<td>Motion index = $0.85$, $Q_{\text{ppg}} = 0.25$, $Q_{\text{ecg}} = 0.25$</td>
+<td>$Q_{\text{overall}} = 0.225 &lt; 0.35$; immediately triggers <code>Insufficient Signal Quality</code>.</td>
+<td style="text-align: center;"><strong>YES</strong></td>
+</tr>
+<tr>
+<td><strong>Complete Sensor Dropout</strong></td>
+<td>All SQIs = $0.0$, Motion = $1.0$</td>
+<td>State clamped to <code>Insufficient Signal Quality</code>; alerts user to check sensor attachment.</td>
+<td style="text-align: center;"><strong>YES</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>5. API Failure Modes &amp; Frontend Graceful Degradation</h2>
+<p>The integration boundary (<code>src/ml_service.py</code> and <code>src/app/api/ml/predict/route.ts</code>) was evaluated against service disruption scenarios:</p>
+<table>
+<thead>
+<tr>
+<th>Failure Condition</th>
+<th>Tested Behavior</th>
+<th>Frontend / API Outcome</th>
+<th style="text-align: center;">Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Missing Feature Key</strong></td>
+<td>Feature dictionary missing <code>st_obs_median</code></td>
+<td>Rejected with <code>400 Bad Request</code> ("Missing required feature"); zero internal stack trace leaked.</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>NaN Feature Value</strong></td>
+<td><code>st_obs_median = NaN</code></td>
+<td>Rejected with <code>400 Bad Request</code> ("Non-finite value rejected").</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Physiological Bounds Violation</strong></td>
+<td><code>ecg_hr_mean = 450.0 bpm</code></td>
+<td>Rejected with <code>400 Bad Request</code> ("Value out of physiological bounds [20.0, 240.0]").</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Malformed JSON</strong></td>
+<td>Syntactically invalid payload <code>{"features": ...</code></td>
+<td>Rejected with <code>400 Bad Request</code> ("Malformed JSON payload").</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>ML Daemon Down (CLI Fallback)</strong></td>
+<td>HTTP server stopped; subprocess fallback invoked</td>
+<td>Subprocess CLI executes inference with identical probability output and latency under 1.6s.</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Stale Cache Suppression</strong></td>
+<td>Upstream failure / timeout</td>
+<td>Frontend sets <code>error</code> state and suppresses stale model outputs; never displays expired data as current.</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>6. Simulated vs. Live Separation Audit</h2>
+<p>The staging interface was audited to verify that simulated or replayed data can never be mistaken for live clinical telemetry:
+1. <strong>Persistent Visual Indicator</strong>: The <code>SimulatedBadge</code> component (<code>C:\ischemic\src\components\layout\Toast.tsx</code>) displays an explicit, high-contrast banner:
+   <code>RESEARCH MODEL — SIMULATED INPUT</code>
+2. <strong>Global Coverage</strong>: Active across all major views:
+   - <code>/dashboard</code> (Dashboard Overview)
+   - <code>/monitor</code> (Real-Time Live Monitor)
+   - <code>/signals</code> (Multi-Channel Physiological Waveforms)
+   - <code>/trends</code> (Historical Physiological Trends)
+   - <code>/insights</code> (AI Physiological Insights)
+   - <code>/clinician</code> (Clinician Summary View)
+3. <strong>Zero Mixed-Mode Ambiguity</strong>: The application enforces mutual exclusivity between simulated streaming mode and hardware streaming.</p>
+<hr />
+<h2>7. UI Consistency Across Views</h2>
+<p>All presentation surfaces rely on a unified state and scoring pipeline:
+- <strong>Single Source of Truth</strong>: The <code>SimulationContext</code> (<code>src/lib/simulation/SimulationContext.tsx</code>) evaluates <code>calculateISI()</code> once per 1-second tick and broadcasts identical scores and state flags to all consuming components.
+- <strong>Unified Risk Colors</strong>:
+  - Green (<code>#10B981</code>): <code>Normal / Stable</code> ($\text{ISI} &lt; 50$)
+  - Yellow (<code>#F59E0B</code>): <code>Elevated ISI Trend</code> or Moderate Deviation ($50 \le \text{ISI} &lt; 65$)
+  - Amber/Red (<code>#EF4444</code>): <code>Elevated Model Evidence</code> ($\text{ISI} \ge 65$ or $p \ge 0.156742$)
+  - Slate/Gray (<code>#64748B</code>): <code>Insufficient Signal Quality</code> or <code>Baseline Establishing</code>
+- <strong>Component Coordination</strong>: <code>ISIGauge</code>, <code>RiskTrendBanner</code>, and <code>ContributionBars</code> always reflect the same 1-second sample without internal divergence.</p>
+<hr />
+<h2>8. Explainability &amp; Prohibited Language Audit</h2>
+<p>An automated regex scan across all source files in <code>C:\ischemic\src</code> evaluated compliance with non-diagnostic regulatory standards.</p>
+<h3>Scan Parameters:</h3>
+<ul>
+<li>Prohibited search patterns: <code>heart attack (detected|confirmed)</code>, <code>ischemia confirmed</code>, <code>diagnosis</code>, <code>clinical certainty</code>, <code>medication instructions</code>, <code>cured</code>.</li>
+<li><strong>Results</strong>: <strong>0 Active Prohibited Assertions Found</strong>.</li>
+</ul>
+<h3>Contextual Distinctions Verified:</h3>
+<ul>
+<li><strong>Intake Checkboxes</strong>: References in <code>health-record/page.tsx</code> are patient medical history intake fields (e.g., "Family history of heart attack"), not diagnostic claims.</li>
+<li><strong>Disclaimers</strong>: Explicit disclaimers ("Research prototype screening system — not a medical diagnostic device") are prominently maintained in headers and footers.</li>
+<li><strong>AI Insights Copy</strong>: Insight text uses purely observational language (e.g., "Physiological load elevation observed", "Elevated model evidence detected in ST observation window", "Autonomic strain elevated relative to personal baseline").</li>
+</ul>
+<hr />
+<h2>9. State Transitions &amp; Anti-Drift Dynamics</h2>
+<p>The system was simulated across a dynamic multi-phase stress sequence:</p>
+<pre><code>Timeline (s)   0 --------- 500 --------- 1200 --------- 2000 --------- 2100 --------- 2200
+State:         [Baseline Est.] -&gt; [Normal/Stable] -&gt; [Elevated Model] -&gt; [Bad Signal] -&gt; [Normal/Stable]
+Baseline HR:   70.0 bpm (fixed)   70.0 -&gt; 71.8 bpm   71.8 bpm (LOCKED)   71.8 bpm (LOCKED)  71.8 bpm (adapting)
+</code></pre>
+<h3>Key Dynamic Observations:</h3>
+<ol>
+<li><strong>Initial Window</strong>: During $t &lt; 600\text{ s}$, the state remains <code>Baseline Establishing</code>; premature stable classifications are blocked.</li>
+<li><strong>Adaptive Tracking</strong>: Under <code>Normal / Stable</code>, baseline vitals adapt smoothly via EMA ($\alpha = 0.02$).</li>
+<li><strong>Anti-Drift Gated Lock</strong>: When an acute stress episode triggers <code>Elevated Model Evidence</code> ($t = 1300\text{ s} - 2000\text{ s}$), baseline updating is <strong>strictly frozen</strong>. The baseline heart rate remains pegged at $71.8\text{ bpm}$, preventing the ischemic stress from normalizing itself.</li>
+<li><strong>Signal Interruption Recovery</strong>: When signal quality collapses ($t = 2100\text{ s}$), the system enters <code>Insufficient Signal Quality</code> and immediately resumes tracking upon signal restoration ($t = 2200\text{ s}$) without state corruption.</li>
+</ol>
+<hr />
+<h2>10. Performance &amp; System Latency Measurements</h2>
+<p>Benchmarking was executed on the deployment staging environment (<code>scratch/audit_phase10.py</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th style="text-align: center;">Measured Value</th>
+<th style="text-align: center;">Operational Requirement</th>
+<th style="text-align: center;">Compliance</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Engine Startup / Initialization</strong></td>
+<td style="text-align: center;"><strong>1,544.24 ms</strong></td>
+<td style="text-align: center;">$&lt; 5,000\text{ ms}$</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>In-Process Inference Latency (Mean)</strong></td>
+<td style="text-align: center;"><strong>5.314 ms</strong></td>
+<td style="text-align: center;">$&lt; 50.0\text{ ms}$</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>In-Process Inference Latency (P50)</strong></td>
+<td style="text-align: center;"><strong>4.456 ms</strong></td>
+<td style="text-align: center;">$&lt; 20.0\text{ ms}$</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>In-Process Inference Latency (P95)</strong></td>
+<td style="text-align: center;"><strong>6.953 ms</strong></td>
+<td style="text-align: center;">$&lt; 20.0\text{ ms}$</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Peak Inference Memory Allocation</strong></td>
+<td style="text-align: center;"><strong>0.06 MB</strong></td>
+<td style="text-align: center;">$&lt; 50.0\text{ MB}$</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Repeated Inference Numerical Difference</strong></td>
+<td style="text-align: center;"><strong>$0.0 \times 10^0$</strong></td>
+<td style="text-align: center;">Bit-for-bit identical</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Next.js Production Compilation</strong></td>
+<td style="text-align: center;"><strong>8.7 s</strong></td>
+<td style="text-align: center;">Clean exit code 0</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>11. Security Audit &amp; Client Bundle Verification</h2>
+<p>A security audit evaluated client-facing artifacts and build outputs:
+1. <strong>Public Directory Audit</strong>: Zero <code>.joblib</code> model binaries, pickle archives, or training artifacts exist in <code>C:\ischemic\public</code>.
+2. <strong>Build Chunk Audit</strong>: Inspection of <code>C:\ischemic\.next</code> confirmed zero model binaries or raw weights are bundled into client-side JavaScript.
+3. <strong>Secret &amp; Key Isolation</strong>: Zero API secrets, private keys, or environment tokens are embedded in client components.
+4. <strong>Information Leakage Prevention</strong>: API error responses return generic, sanitized messages; zero server filesystem paths, operating system usernames, or Python stack traces are exposed.</p>
+<hr />
+<h2>12. Full Regression Suite Results</h2>
+<p>All unit, integration, and end-to-end test suites were executed sequentially:</p>
+<pre><code>======================================================================
+1. tests/test_inference.py (Phase 6 Unit Tests)
+   - 11 Tests covering feature validation, types, bounds, repeatability
+   - Result: 11 / 11 PASSED (0 failures, 0 errors)
+
+2. tests/test_staging_integration.py (Phase 7 Integration Tests)
+   - 14 Tests covering HTTP service, CLI fallback, security headers, metadata
+   - Result: 14 / 14 PASSED (0 failures, 0 errors)
+
+3. tests/test_isi_engine.py (Phase 9 ISI Tests)
+   - 18 Tests covering mathematical formulas, clamp bounds, quality gates
+   - Result: 18 / 18 PASSED (0 failures, 0 errors)
+
+4. tests/test_end_to_end_validation.py (Phase 10 E2E Tests)
+   - 10 Tests covering pipeline trace, 5 scenarios, threshold, degraded modes
+   - Result: 10 / 10 PASSED (0 failures, 0 errors)
+
+5. TypeScript Compiler Validation (npx tsc --noEmit)
+   - Result: 0 ERRORS (Clean exit code 0)
+
+6. Next.js Production Build (npm run build)
+   - Static pages generated: 37 / 37 routes
+   - Middleware: 91.9 kB
+   - Shared client JS: 102 kB
+   - Result: BUILD SUCCEEDED (Clean exit code 0)
+======================================================================
+TOTAL AUTOMATED TESTS: 53 / 53 PASSED (100%)
+======================================================================
+</code></pre>
+<hr />
+<h2>13. Known Limitations</h2>
+<ol>
+<li><strong>Intraoperative Retrospective Provenance</strong>: The underlying XGBoost model was developed on retrospective data from 100 surgical cases in the VitalDB repository. Its performance under general anesthesia may differ significantly from ambulatory or outpatient settings.</li>
+<li><strong>Prototype Product Formula</strong>: While the machine learning model was rigorously evaluated on held-out test data, the multi-source composite ISI weights ($0.45, 0.30, 0.25$) are prototype engineering constants that have not undergone formal prospective clinical trials.</li>
+<li><strong>Hardware Generalization</strong>: BeatAhead's photoplethysmography processing was calibrated on clinical-grade pulse oximeters; consumer smartwatch PPG sensors with higher motion susceptibility have not been clinically validated.</li>
+</ol>
+<hr />
+<h2>14. Deployment Status &amp; Decision</h2>
+<ul>
+<li><strong>Vercel / Production Deployment</strong>: <strong>HELD (Per explicit instructions)</strong>.</li>
+<li><strong>Local Staging</strong>: <strong>CERTIFIED &amp; FROZEN</strong>.</li>
+<li><strong>Action Required</strong>: The staging system is hardened, validated, and ready for clinical demonstration and internal review.</li>
+</ul>
+</body>
+</html>

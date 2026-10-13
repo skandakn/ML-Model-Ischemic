@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>BeatAhead Implementation Document</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; line-height: 1.55; font-size: 10.5pt; margin: 0; }
+  h1 { font-size: 18pt; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 6px; page-break-after: avoid; }
+  h2 { font-size: 13pt; color: #1e3a8a; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-top: 22px; page-break-after: avoid; }
+  h3 { font-size: 11pt; color: #1d4ed8; margin-top: 16px; page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 8.5pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background-color: #0f2b48; color: #ffffff; }
+  tr:nth-child(even) { background-color: #f8fafc; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background-color: #f1f5f9; padding: 2px 4px; }
+  pre { background-color: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 6px; font-size: 8pt; line-height: 1.35; page-break-inside: avoid; }
+  blockquote { margin: 10px 0; padding: 8px 14px; background-color: #eff6ff; border-left: 4px solid #3b82f6; color: #1e40af; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>Phase 8.1 — BeatAhead ISI Sensitivity &amp; Robustness Audit Report</h1>
+<p><strong>Document ID:</strong> BEATAHEAD-PHASE8-1-SENSITIVITY-AUDIT<br />
+<strong>Execution Timestamp:</strong> 2026-09-22 19:55:00 UTC<br />
+<strong>Environment:</strong> Mathematical Sensitivity &amp; Robustness Audit<br />
+<strong>Status:</strong> COMPLETE (Zero Retraining / Zero Code Modification / Zero Threshold Alteration)<br />
+<strong>Frozen Parameters Evaluated:</strong>
+- Model Decision Threshold: $\tau = 0.156742$ (Preserved strictly)
+- Model Evidence Curvature: $\gamma_1 = 1.4$, $\gamma_2 = 4.0$
+- Component Weights: $w_{\text{model}} = 0.45$, $w_{\text{auto}} = 0.30$, $w_{\text{perf}} = 0.25$
+- Personal Baseline: $\text{ISI}_{\text{base}} = 40.0$, Scale $S = 60.0$, EMA $\alpha = 0.02$
+- Target Invariant: $0 \le \text{ISI} \le 100$</p>
+<hr />
+<h2>1. Executive Summary</h2>
+<p>Phase 8.1 conducts an isolated mathematical sensitivity and robustness audit of the prototype <strong>Ischemic Stress Index (ISI)</strong> formula defined in Phase 8 (<code>docs/ISI_SPECIFICATION.md</code>). </p>
+<p>In strict observance of project boundaries:
+- The frozen XGBoost model (<code>models/beatahead_phase5_model.joblib</code>) was <strong>not</strong> retrained or altered.
+- The 26-feature Matrix A schema (<code>models/feature_schema.json</code>) was <strong>not</strong> modified.
+- The 100-case VitalDB dataset and the 20-case locked test split were <strong>not</strong> accessed or optimized against.
+- No website code in <code>C:\ischemic</code> was touched.
+- The calibrated decision threshold ($\tau = 0.156742$) was <strong>preserved exactly</strong>.</p>
+<h3>Key Audit Findings:</h3>
+<ol>
+<li><strong>Mathematical Invariant Holds Universally ($0 \le \text{ISI} \le 100$)</strong>:
+   Across 10,000 dense sampling points, all 14 boundary edge cases, and multi-component saturation tests, the composite ISI score remained strictly bounded within $[0, 100]$. Maximum possible theoretical saturation produced $\text{ISI}<em>{\text{raw}} = 103.35$ (cleanly clamped to $100$), and minimum possible theoretical input produced $\text{ISI}</em>{\text{raw}} = 25.6$ (clamped to $26$).</li>
+<li><strong>Monotonicity &amp; Exact Threshold Continuity</strong>:
+   The model evidence transformation $E_{\text{model}}(p)$ is strictly monotonically increasing ($\frac{\partial E}{\partial p} &gt; 0$) across the entire domain $p \in [0, 1]$. At the exact decision threshold $p = 0.156742$, $E_{\text{model}} = 0.500000$, ensuring seamless continuity between sub-threshold suppression and post-threshold scaling.</li>
+<li><strong>Weight Perturbation Stability</strong>:
+   Perturbing component weights by $\pm 22\%$ (Model: $0.35–0.55$, Autonomic: $0.20–0.40$, Perfusion: $0.15–0.35$) altered normal resting scores by $&lt; 3$ ISI points and high-stress scores by $&lt; 6$ ISI points, demonstrating structural robustness without erratic bifurcation.</li>
+<li><strong>Baseline Anti-Drift Rule Verified</strong>:
+   Under an acute simulated stress event (HR rising from $68 \rightarrow 88\text{ bpm}$ over 30 minutes), standard un-gated EMA ($\alpha=0.02$) drifted by $+8.5\text{ bpm}$, erroneously normalizing the stress state. The Phase 8 <strong>Gated Anti-Drift Rule</strong> successfully froze baseline updates during elevated states, preserving a true $+29.4\%$ quantified physiological deviation throughout the event.</li>
+<li><strong>Parameter Identifiability Reality</strong>:
+   The VitalDB intraoperative development data <strong>cannot</strong> legitimately estimate or validate product-layer constants ($w_i, S, \gamma_i$). Anesthetized surgical hemodynamic patterns do not translate to ambulatory wellness indices. All product-layer parameters are formally designated: <strong>"Prototype engineering parameters — not clinically validated."</strong></li>
+</ol>
+<hr />
+<h2>2. Baseline ISI Mathematical Formulation</h2>
+<p>The baseline prototype specification evaluated in this audit consists of the following closed-form system:</p>
+<h3>2.1 Model Evidence Mapping</h3>
+<p>$$E_{\text{model}}(p) = \begin{cases} 
+0.50 \cdot \left( \frac{p}{\tau} \right)^{\gamma_1} &amp; p &lt; \tau \
+0.50 + 0.50 \cdot \left( 1 - \exp\left( -\gamma_2 \frac{p - \tau}{1 - \tau} \right) \right) &amp; p \ge \tau
+\end{cases}$$
+- $\tau = 0.156742$ (Frozen Phase 5 Decision Threshold)
+- $\gamma_1 = 1.4$ (Sub-threshold dampening exponent)
+- $\gamma_2 = 4.0$ (Post-threshold sensitivity coefficient)</p>
+<h3>2.2 Autonomic Factor ($D_{\text{auto}}$)</h3>
+<p>$$f_{\text{hr}} = \text{clamp}\left( \frac{HR - HR_{\text{base}}}{25.0}, 0.0, 1.0 \right), \quad f_{\text{hrv}} = \text{clamp}\left( \frac{SDNN_{\text{base}} - SDNN}{0.60 \cdot SDNN_{\text{base}}}, 0.0, 1.0 \right)$$
+$$D_{\text{auto}} = 0.50 \cdot f_{\text{hr}} + 0.50 \cdot f_{\text{hrv}}$$</p>
+<h3>2.3 Perfusion &amp; Oxygenation Factor ($D_{\text{perf}}$)</h3>
+<p>$$f_{\text{spo2}} = \text{clamp}\left( \frac{SpO2_{\text{base}} - SpO2}{5.0}, 0.0, 1.0 \right), \quad f_{\text{pat}} = \text{clamp}\left( \frac{PAT_{\text{base}} - PAT}{50.0}, 0.0, 1.0 \right)$$
+$$D_{\text{perf}} = \begin{cases} 
+0.60 \cdot f_{\text{spo2}} + 0.40 \cdot f_{\text{pat}} &amp; \text{if } V_{\text{pat}} == 1 \
+f_{\text{spo2}} &amp; \text{if } V_{\text{pat}} == 0
+\end{cases}$$</p>
+<h3>2.4 Trend Momentum ($M_{\text{trend}}$)</h3>
+<p>$$M_{\text{trend}} = \text{clamp}\left( \frac{v}{2.0}, -0.15, +0.15 \right) \quad (v = \text{points / minute over 5-min})$$</p>
+<h3>2.5 Multi-Source Aggregation &amp; Clamping</h3>
+<p>$$\text{ISI}<em>{\text{raw}} = 40.0 + \left[ 0.45(E</em>{\text{model}} - 0.20) + 0.30 D_{\text{auto}} + 0.25 D_{\text{perf}} + M_{\text{trend}} \right] \times 60.0$$
+$$\text{ISI} = \text{round}\left( \max\left( 0.0, \min\left( 100.0, \text{ISI}_{\text{raw}} \right) \right) \right)$$</p>
+<hr />
+<h2>3. Parameter Summary Table</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Parameter</th>
+<th style="text-align: center;">Baseline Value</th>
+<th style="text-align: center;">Permissible Range</th>
+<th style="text-align: left;">Mathematical Role</th>
+<th style="text-align: left;">Engineering Justification</th>
+<th style="text-align: center;">Classification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">$\tau$</td>
+<td style="text-align: center;"><strong>$0.156742$</strong></td>
+<td style="text-align: center;">Fixed</td>
+<td style="text-align: left;">Model Decision Threshold</td>
+<td style="text-align: left;">Optimal $F_2$ utility threshold from Phase 5 benchmark</td>
+<td style="text-align: center;"><strong>Class A (Freeze)</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">$\gamma_1$</td>
+<td style="text-align: center;"><strong>$1.4$</strong></td>
+<td style="text-align: center;">$[1.2, 1.6]$</td>
+<td style="text-align: left;">Sub-threshold suppression</td>
+<td style="text-align: left;">Compresses surgical baseline noise ($p \le 0.01 \rightarrow E \le 0.01$)</td>
+<td style="text-align: center;"><strong>Class B (Empirical)</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">$\gamma_2$</td>
+<td style="text-align: center;"><strong>$4.0$</strong></td>
+<td style="text-align: center;">$[3.0, 5.0]$</td>
+<td style="text-align: left;">Post-threshold saturation rate</td>
+<td style="text-align: left;">Elevates evidence swiftly when model flags risk ($p &gt; 0.30 \rightarrow E &gt; 0.75$)</td>
+<td style="text-align: center;"><strong>Class B (Empirical)</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">$w_{\text{model}}$</td>
+<td style="text-align: center;"><strong>$0.45$</strong></td>
+<td style="text-align: center;">$[0.35, 0.55]$</td>
+<td style="text-align: left;">Model contribution weight</td>
+<td style="text-align: left;">Primary driver of prospective early-warning alerts</td>
+<td style="text-align: center;"><strong>Class B (Empirical)</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">$w_{\text{auto}}$</td>
+<td style="text-align: center;"><strong>$0.30$</strong></td>
+<td style="text-align: center;">$[0.20, 0.40]$</td>
+<td style="text-align: left;">Autonomic contribution weight</td>
+<td style="text-align: left;">Reflects autonomic stress (HR elevation, HRV collapse)</td>
+<td style="text-align: center;"><strong>Class B (Empirical)</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">$w_{\text{perf}}$</td>
+<td style="text-align: center;"><strong>$0.25$</strong></td>
+<td style="text-align: center;">$[0.15, 0.35]$</td>
+<td style="text-align: left;">Perfusion contribution weight</td>
+<td style="text-align: left;">Reflects oxygen desaturation and pulse transit shortening</td>
+<td style="text-align: center;"><strong>Class B (Empirical)</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">$\text{ISI}_{\text{base}}$</td>
+<td style="text-align: center;"><strong>$40.0$</strong></td>
+<td style="text-align: center;">$[35.0, 45.0]$</td>
+<td style="text-align: left;">Resting personal baseline anchor</td>
+<td style="text-align: left;">Places normal resting physiology in the lower half of $0–100$ gauge</td>
+<td style="text-align: center;"><strong>Class A (Freeze)</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">$S$</td>
+<td style="text-align: center;"><strong>$60.0$</strong></td>
+<td style="text-align: center;">$[50.0, 70.0]$</td>
+<td style="text-align: left;">Dynamic span multiplier</td>
+<td style="text-align: left;">Maps cumulative strain across the remaining $60$ points of gauge</td>
+<td style="text-align: center;"><strong>Class A (Freeze)</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">$\alpha$</td>
+<td style="text-align: center;"><strong>$0.02$</strong></td>
+<td style="text-align: center;">$[0.01, 0.05]$</td>
+<td style="text-align: left;">Baseline EMA update factor</td>
+<td style="text-align: left;">Smooths baseline over ~50 clean observation windows</td>
+<td style="text-align: center;"><strong>Class B (Empirical)</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;">$Q_{\text{min}}$</td>
+<td style="text-align: center;"><strong>$0.35$</strong></td>
+<td style="text-align: center;">$[0.30, 0.40]$</td>
+<td style="text-align: left;">Signal quality gate threshold</td>
+<td style="text-align: left;">Rejects un-contacted leads or severe motion artifact</td>
+<td style="text-align: center;"><strong>Class A (Freeze)</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>4. Model-Evidence Sensitivity Analysis</h2>
+<p>We evaluated the sensitivity of the evidence function $E_{\text{model}}(p)$ across a 1,000-point grid spanning $p \in [0.0001, 1.0]$ under parameter perturbations:
+- Sub-threshold exponent $\gamma_1 \in {1.2, 1.4, 1.6}$
+- Post-threshold coefficient $\gamma_2 \in {3.0, 4.0, 5.0}$</p>
+<p><img alt="Model Evidence Sensitivity" src="figures/phase8_1/model_evidence_sensitivity.png" />
+<em>Figure 1: (A) Model Evidence Curve $E_{\text{model}}(p)$ across parameter variants. The curves intersect at the exact threshold coordinate $(\tau = 0.156742, E = 0.50)$. (B) Deviation from baseline specification. Maximum absolute deviation is bounded within $\pm 0.053$.</em></p>
+<h3>Quantitative Findings:</h3>
+<ul>
+<li><strong>Exact Threshold Invariance</strong>: Across all variants of $\gamma_1$ and $\gamma_2$, $E_{\text{model}}(\tau) \equiv 0.500000$. The transition point is structurally anchored to the frozen model decision threshold.</li>
+<li><strong>Sub-Threshold Behavior ($p &lt; \tau$)</strong>:</li>
+<li>At cohort median baseline ($p = 0.005$):<ul>
+<li>$\gamma_1 = 1.2 \rightarrow E = 0.0080$ ($\Delta E = +0.0040$)</li>
+<li>$\gamma_1 = 1.4 \text{ (Baseline)} \rightarrow E = 0.0040$</li>
+<li>$\gamma_1 = 1.6 \rightarrow E = 0.0020$ ($\Delta E = -0.0020$)</li>
+</ul>
+</li>
+<li>In all cases, baseline surgical noise contributes less than $0.01$ to evidence ($&lt; 0.3$ ISI points), preventing baseline score inflation.</li>
+<li><strong>Post-Threshold Behavior ($p \ge \tau$)</strong>:</li>
+<li>At moderate model confidence ($p = 0.30$):<ul>
+<li>$\gamma_2 = 3.0 \rightarrow E = 0.700$ ($\Delta E = -0.047$)</li>
+<li>$\gamma_2 = 4.0 \text{ (Baseline)} \rightarrow E = 0.747$</li>
+<li>$\gamma_2 = 5.0 \rightarrow E = 0.786$ ($\Delta E = +0.039$)</li>
+</ul>
+</li>
+<li>Maximum evidence deviation across the entire domain is only <strong>$0.0527$</strong>, which translates to a maximum shift of <strong>$\pm 1.4$ ISI points</strong>.</li>
+<li><strong>Conclusion</strong>: The model evidence transformation is exceptionally well-behaved and insensitive to moderate parameter tuning.</li>
+</ul>
+<hr />
+<h2>5. Component Weight Sensitivity Analysis</h2>
+<p>We evaluated balanced triplets of $(w_{\text{model}}, w_{\text{auto}}, w_{\text{perf}})$ satisfying $\sum w_i = 1.00$:
+1. <strong>Baseline</strong>: $(0.45, 0.30, 0.25)$
+2. <strong>Model-Dominant</strong>: $(0.55, 0.25, 0.20)$
+3. <strong>Physiology-Dominant</strong>: $(0.35, 0.35, 0.30)$
+4. <strong>Perfusion-Heavy</strong>: $(0.45, 0.20, 0.35)$
+5. <strong>Autonomic-Heavy</strong>: $(0.45, 0.40, 0.15)$</p>
+<p><img alt="Component Weight Sensitivity" src="figures/phase8_1/component_weight_sensitivity.png" />
+<em>Figure 2: Component weight sensitivity under (A) Isolated model probability elevation with normal physiology, and (B) Multi-modal stress state with concurrent autonomic and perfusion deviations.</em></p>
+<h3>Observations:</h3>
+<ul>
+<li>In <strong>Isolated Model Strain</strong> (Figure 2A), where physiology is completely calm ($D_{\text{auto}} = 0, D_{\text{perf}} = 0$):</li>
+<li>At $p = 0.005$, all weight variants yield $\text{ISI} = 34–35$ (within the "Lower observed trend" green bracket).</li>
+<li>At $p = \tau = 0.156742$, the baseline yields $\text{ISI} = 48$, Model-Dominant yields $50$, and Physiology-Dominant yields $46$.</li>
+<li>At maximum model probability ($p = 1.0$), the score rises to $61$ under baseline and $66$ under Model-Dominant. Even in the complete absence of peripheral physiological changes, high model confidence can elevate the index into the "Higher observed trend" category ($\ge 61$).</li>
+<li>In <strong>Multi-Modal Stress</strong> (Figure 2B), where autonomic ($0.60$) and perfusion ($0.50$) deviations are present:</li>
+<li>Baseline score begins at $\text{ISI} = 51$ even when $p \approx 0$.</li>
+<li>At threshold $p = 0.156742$, score reaches $\text{ISI} = 65$ (crossing into the alert territory).</li>
+<li>As $p \rightarrow 0.60$, score reaches $\text{ISI} = 76–80$.</li>
+<li><strong>Conclusion</strong>: The $0.45 / 0.30 / 0.25$ weighting establishes a balanced dynamic range where neither pure model output nor pure autonomic drift can unilaterally saturate the index to $100$.</li>
+</ul>
+<hr />
+<h2>6. Personal Baseline EMA Dynamics &amp; Anti-Drift Analysis</h2>
+<p>A key challenge in longitudinal physiological tracking is avoiding <strong>pathological baseline adaptation</strong> (where an acute or subacute ischemic event causes the baseline to update, normalizing the abnormal physiology).</p>
+<p>We evaluated a 200-minute synthetic trajectory containing a 70-minute physiological stress event (HR rising from $68 \rightarrow 88\text{ bpm}$) under smoothing factors $\alpha \in {0.01, 0.02, 0.05}$.</p>
+<p><img alt="Baseline EMA Dynamics" src="figures/phase8_1/baseline_ema_tracking_analysis.png" />
+<em>Figure 3: (A) Baseline tracking response comparing un-gated EMA against the Phase 8 Gated Anti-Drift Rule. (B) Quantified relative deviation $\Delta \text{HR}$ (%) showing clean persistence of elevation throughout the event.</em></p>
+<h3>Key Dynamics:</h3>
+<ul>
+<li><strong>Un-Gated EMA Failure</strong>:</li>
+<li>With standard un-gated EMA ($\alpha=0.02$), the baseline heart rate climbed from $68.0\text{ bpm}$ up to $76.5\text{ bpm}$ during the stress event.</li>
+<li>Consequently, quantified baseline deviation dropped prematurely from $+29.4\%$ down to $+15.0\%$ while the patient was still under acute stress.</li>
+<li>When the patient recovered back to $68\text{ bpm}$, the un-gated baseline took $&gt; 60\text{ minutes}$ to return, creating a false "negative deviation" artifact.</li>
+<li><strong>Phase 8 Gated Anti-Drift Rule</strong>:</li>
+<li>The Phase 8 rule freezes baseline updating whenever the system enters an elevated state ($\text{State} \neq \text{"Normal / Stable"}$).</li>
+<li>As demonstrated in Figure 3A (emerald curve), the baseline remained strictly locked at $68.0\text{ bpm}$ throughout the entire event.</li>
+<li>Relative deviation (Figure 3B) accurately registered $+29.4\%$ for the full duration of the stress pulse and returned to $0.0\%$ immediately upon physiological recovery.</li>
+<li><strong>Selection of $\alpha = 0.02$</strong>:</li>
+<li>During quiet normative states, $\alpha = 0.02$ effectively filters high-frequency respiratory sinus arrhythmia without lagging behind circadian resting drifts.</li>
+</ul>
+<hr />
+<h2>7. Edge Cases &amp; Invariant Verification</h2>
+<p>We executed all 14 canonical edge cases specified in the Phase 8 requirements. Results are documented in the table below:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Case ID</th>
+<th style="text-align: left;">Scenario Description</th>
+<th style="text-align: center;">$p_{\text{model}}$</th>
+<th style="text-align: center;">$E_{\text{model}}$</th>
+<th style="text-align: center;">$Q_{\text{overall}}$</th>
+<th style="text-align: center;">Raw ISI</th>
+<th style="text-align: center;">Clamped ISI</th>
+<th style="text-align: left;">State Machine Output</th>
+<th style="text-align: center;">Invariant Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>EC-01</strong></td>
+<td style="text-align: left;">$p_{\text{model}} = 0.0$ (Absolute Minimum)</td>
+<td style="text-align: center;">$0.0000$</td>
+<td style="text-align: center;">$0.0000$</td>
+<td style="text-align: center;">$1.000$</td>
+<td style="text-align: center;">$34.60$</td>
+<td style="text-align: center;"><strong>35</strong></td>
+<td style="text-align: left;"><code>Normal / Stable</code></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>EC-02</strong></td>
+<td style="text-align: left;">$p_{\text{model}} = 0.156742$ (Exact Threshold)</td>
+<td style="text-align: center;">$0.1567$</td>
+<td style="text-align: center;">$0.5000$</td>
+<td style="text-align: center;">$1.000$</td>
+<td style="text-align: center;">$48.10$</td>
+<td style="text-align: center;"><strong>48</strong></td>
+<td style="text-align: left;"><code>Elevated Model Evidence</code></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>EC-03</strong></td>
+<td style="text-align: left;">Sub-threshold Boundary ($\tau - 10^{-6}$)</td>
+<td style="text-align: center;">$0.1567$</td>
+<td style="text-align: center;">$0.5000$</td>
+<td style="text-align: center;">$1.000$</td>
+<td style="text-align: center;">$48.10$</td>
+<td style="text-align: center;"><strong>48</strong></td>
+<td style="text-align: left;"><code>Normal / Stable</code></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>EC-04</strong></td>
+<td style="text-align: left;">Post-threshold Boundary ($\tau + 10^{-6}$)</td>
+<td style="text-align: center;">$0.1567$</td>
+<td style="text-align: center;">$0.5000$</td>
+<td style="text-align: center;">$1.000$</td>
+<td style="text-align: center;">$48.10$</td>
+<td style="text-align: center;"><strong>48</strong></td>
+<td style="text-align: left;"><code>Elevated Model Evidence</code></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>EC-05</strong></td>
+<td style="text-align: left;">$p_{\text{model}} = 1.0$ (Theoretical Maximum)</td>
+<td style="text-align: center;">$1.0000$</td>
+<td style="text-align: center;">$0.9908$</td>
+<td style="text-align: center;">$1.000$</td>
+<td style="text-align: center;">$61.35$</td>
+<td style="text-align: center;"><strong>61</strong></td>
+<td style="text-align: left;"><code>Elevated Model Evidence</code></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>EC-06</strong></td>
+<td style="text-align: left;">All Deviations = 0 (Quiet Cohort Baseline)</td>
+<td style="text-align: center;">$0.0050$</td>
+<td style="text-align: center;">$0.0040$</td>
+<td style="text-align: center;">$1.000$</td>
+<td style="text-align: center;">$34.71$</td>
+<td style="text-align: center;"><strong>35</strong></td>
+<td style="text-align: left;"><code>Normal / Stable</code></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>EC-07</strong></td>
+<td style="text-align: left;">Maximum Allowed Deviations (All Saturated)</td>
+<td style="text-align: center;">$1.0000$</td>
+<td style="text-align: center;">$0.9908$</td>
+<td style="text-align: center;">$1.000$</td>
+<td style="text-align: center;">$103.35$</td>
+<td style="text-align: center;"><strong>100</strong></td>
+<td style="text-align: left;"><code>Elevated Model Evidence</code></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>EC-08</strong></td>
+<td style="text-align: left;">Minimum Allowed Deviations (Negative Trend)</td>
+<td style="text-align: center;">$0.0000$</td>
+<td style="text-align: center;">$0.0000$</td>
+<td style="text-align: center;">$1.000$</td>
+<td style="text-align: center;">$25.60$</td>
+<td style="text-align: center;"><strong>26</strong></td>
+<td style="text-align: left;"><code>Normal / Stable</code></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>EC-09</strong></td>
+<td style="text-align: left;">Missing Optional Input (PAT Invalid, $V_{\text{pat}}=0$)</td>
+<td style="text-align: center;">$0.0200$</td>
+<td style="text-align: center;">$0.0280$</td>
+<td style="text-align: center;">$0.730$</td>
+<td style="text-align: center;">$43.46$</td>
+<td style="text-align: center;"><strong>43</strong></td>
+<td style="text-align: left;"><code>Normal / Stable</code></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>EC-10</strong></td>
+<td style="text-align: left;">Poor ECG Signal Quality ($Q_{\text{ecg}} = 0.30$)</td>
+<td style="text-align: center;">$0.0500$</td>
+<td style="text-align: center;">$0.1010$</td>
+<td style="text-align: center;">$0.675$</td>
+<td style="text-align: center;">$37.33$</td>
+<td style="text-align: center;"><strong>37</strong></td>
+<td style="text-align: left;"><code>Normal / Stable</code></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>EC-11</strong></td>
+<td style="text-align: left;">Simultaneous Poor ECG + PPG ($Q=0.23$)</td>
+<td style="text-align: center;">$0.1000$</td>
+<td style="text-align: center;">$0.2665$</td>
+<td style="text-align: center;">$0.230$</td>
+<td style="text-align: center;">$58.30$</td>
+<td style="text-align: center;"><strong>58</strong></td>
+<td style="text-align: left;"><code>Insufficient Signal Quality</code></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>EC-12</strong></td>
+<td style="text-align: left;">Isolated PAT Invalidation ($V_{\text{pat}} = 0$)</td>
+<td style="text-align: center;">$0.0100$</td>
+<td style="text-align: center;">$0.0106$</td>
+<td style="text-align: center;">$0.812$</td>
+<td style="text-align: center;">$34.89$</td>
+<td style="text-align: center;"><strong>35</strong></td>
+<td style="text-align: left;"><code>Normal / Stable</code></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>EC-13</strong></td>
+<td style="text-align: left;">High Motion Artifact ($I_{\text{motion}} = 0.85$)</td>
+<td style="text-align: center;">$0.0400$</td>
+<td style="text-align: center;">$0.0739$</td>
+<td style="text-align: center;">$0.355$</td>
+<td style="text-align: center;">$45.00$</td>
+<td style="text-align: center;"><strong>45</strong></td>
+<td style="text-align: left;"><code>Normal / Stable</code> (Motion Flagged)</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>EC-14</strong></td>
+<td style="text-align: left;">All Signals Unavailable (Disconnected)</td>
+<td style="text-align: center;">$0.0000$</td>
+<td style="text-align: center;">$0.0000$</td>
+<td style="text-align: center;">$0.000$</td>
+<td style="text-align: center;">$34.60$</td>
+<td style="text-align: center;"><strong>35</strong></td>
+<td style="text-align: left;"><code>Insufficient Signal Quality</code></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+</tbody>
+</table>
+<h3>Mathematical Invariants Verified:</h3>
+<ol>
+<li><strong>$0 \le \text{ISI} \le 100$ Invariant</strong>: Passed across all cases. Even under artificial double-saturation (EC-07), raw score $103.35$ was strictly clamped to $100$.</li>
+<li><strong>Threshold Boundary Decoupling</strong>: EC-03 and EC-04 have virtually identical ISI scores ($48$), but EC-03 is classified as <code>Normal / Stable</code> while EC-04 triggers <code>Elevated Model Evidence</code>. This mathematically proves that <strong>Model Alert State is independent from the continuous ISI display score</strong>.</li>
+<li><strong>Quality Gating Invariant</strong>: When overall signal quality falls below $0.35$ (EC-11 and EC-14), the state machine immediately overrides the numeric score and enforces <code>Insufficient Signal Quality</code>, preventing false precision.</li>
+</ol>
+<hr />
+<h2>8. Parameter Identifiability &amp; Clinical Status</h2>
+<blockquote>
+<p>[!IMPORTANT]
+<strong>Can the VitalDB development dataset identify or optimize Phase 8 product-layer parameters?</strong></p>
+<p><strong>NO.</strong> The VitalDB dataset comprises intraoperative surgical recordings from anesthetized patients undergoing major surgery. The training labels represent discrete, severe prospective ST-depression events. </p>
+<p>Attempting to optimize continuous product-layer weights ($w_{\text{model}}, w_{\text{auto}}, w_{\text{perf}}$) or baseline constants ($\text{ISI}_{\text{base}} = 40$) against surgical ST events would represent a <strong>fundamental methodological category error</strong>:
+1. General anesthesia profoundly suppresses autonomic variability, abolishes baroreflex sensitivity, and distorts peripheral pulse transit.
+2. VitalDB contains no ambulatory wellness, subjective symptom, or multi-modal stress ground truth.
+3. Tuning UX display parameters against intraoperative binary events would generate an illusion of clinical calibration.</p>
+<p>Therefore, in accordance with Task 7:
+<strong>"All Phase 8 product-layer constants are prototype engineering parameters — not clinically validated."</strong></p>
+</blockquote>
+<hr />
+<h2>9. Parameter Classification &amp; Future Roadmap</h2>
+<p>We classify every parameter in the Phase 8 architecture into three strict categories:</p>
+<pre><code>+--------------------------------------------------------------------------------------------------+
+|                                  PARAMETER CLASSIFICATION SUMMARY                                 |
++--------------------------------------------------------------------------------------------------+
+
+ CLASS A: SAFE TO FREEZE AS PROTOTYPE ENGINEERING CONSTANTS
+ ---------------------------------------------------------------------------------------------------
+  * Decision Threshold (tau = 0.156742): Statistically optimized on 80-case dev cohort. Frozen.
+  * Score Bounding ([0, 100]): Fundamental mathematical UX invariant. Frozen.
+  * Midpoint Evidence Anchor (E_model(tau) == 0.50): Structural bridge between model and UI. Frozen.
+  * Quality Gate Cutoff (Q_overall &lt; 0.35): Rejects un-contacted sensors. Frozen.
+  * Anti-Drift Locking Rule: Freezes baseline update during elevated states. Frozen.
+  * Baseline Initialization Duration (600s): Minimum observation for stable median. Frozen.
+
+ CLASS B: REQUIRES FUTURE EMPIRICAL VALIDATION (POST-STAGE AMBULATORY STUDY)
+ ---------------------------------------------------------------------------------------------------
+  * Component Weights (w_model=0.45, w_auto=0.30, w_perf=0.25): Requires validation on real wearable hardware.
+  * Evidence Curvature Exponents (gamma1=1.4, gamma2=4.0): Requires empirical tuning against user false-alarm tolerance.
+  * Baseline EMA Alpha (alpha=0.02): Requires 24-hour ambulatory circadian tracking data.
+  * Trend Velocity Horizon (5-minute regression window): Requires optimization on physical activity artifacts.
+  * Quality Sensor Weighting (ECG: 0.40, PPG: 0.35, PAT: 0.15, IMU: 0.10): Requires bench testing with motion rigs.
+
+ CLASS C: PROHIBITED FROM BEING REPRESENTED AS CLINICALLY MEANINGFUL
+ ---------------------------------------------------------------------------------------------------
+  * Absolute ISI Numeric Values (e.g., &quot;an ISI of 55 indicates 55% ischemia risk&quot; is strictly false).
+  * UI Bracket Boundaries (0–30, 31–60, 61–100): Purely visual design groupings, NOT medical cutoffs.
+  * Synthetic Scenario Multipliers: Purely simulation artifacts for UI demonstration.
++--------------------------------------------------------------------------------------------------+
+</code></pre>
+<hr />
+<h2>10. Audit Conclusion</h2>
+<p>The Phase 8 BeatAhead Ischemic Stress Index (ISI) formula is <strong>mathematically sound, structurally robust, strictly bounded, and cleanly decoupled from the frozen ML inference engine</strong>. </p>
+<p>All sensitivity sweeps, edge-case evaluations, and invariant proofs passed without discrepancy. Phase 8.1 is complete. No website code was altered.</p>
+</body>
+</html>

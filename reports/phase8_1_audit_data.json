@@ -1,0 +1,188 @@
+{
+  "task2_evidence_sensitivity": {
+    "g1_1.4_g2_4.0": {
+      "max_abs_diff_e": 0.0,
+      "mean_abs_diff_e": 0.0,
+      "e_at_threshold": 0.5,
+      "e_at_005": 0.004020392672917279,
+      "e_at_030": 0.7465762950721675
+    },
+    "g1_1.2_g2_4.0": {
+      "max_abs_diff_e": 0.028325822164737252,
+      "mean_abs_diff_e": 0.0029659221466367186,
+      "e_at_threshold": 0.5,
+      "e_at_005": 0.008007769224750045,
+      "e_at_030": 0.7465762950721675
+    },
+    "g1_1.6_g2_4.0": {
+      "max_abs_diff_e": 0.024543283810112893,
+      "mean_abs_diff_e": 0.0025096463992528495,
+      "e_at_threshold": 0.5,
+      "e_at_005": 0.002018484398187869,
+      "e_at_030": 0.7465762950721675
+    },
+    "g1_1.4_g2_3.0": {
+      "max_abs_diff_e": 0.0527343677973956,
+      "mean_abs_diff_e": 0.030049951078399372,
+      "e_at_threshold": 0.5,
+      "e_at_005": 0.004020392672917279,
+      "e_at_030": 0.6996497983021321
+    },
+    "g1_1.4_g2_5.0": {
+      "max_abs_diff_e": 0.04095985592581708,
+      "mean_abs_diff_e": 0.019704199934213292,
+      "e_at_threshold": 0.5,
+      "e_at_005": 0.004020392672917279,
+      "e_at_030": 0.786171030163137
+    }
+  },
+  "invariants": {
+    "all_isi_bounded_0_100": true,
+    "monotonically_increasing_evidence": true,
+    "exact_threshold_evidence_midpoint": true,
+    "zero_quality_triggers_insufficient_state": true,
+    "baseline_establishing_holds_before_600s": true
+  },
+  "edge_cases": [
+    {
+      "id": "EC-01",
+      "desc": "p_model = 0.0 (Absolute Minimum)",
+      "p_model": 0.0,
+      "e_model": 0.0,
+      "q_overall": 1.0,
+      "raw_isi": 34.6,
+      "clamped_isi": 35,
+      "state": "Normal / Stable"
+    },
+    {
+      "id": "EC-02",
+      "desc": "p_model = 0.156742 (Exact Decision Threshold)",
+      "p_model": 0.156742,
+      "e_model": 0.5,
+      "q_overall": 1.0,
+      "raw_isi": 48.1,
+      "clamped_isi": 48,
+      "state": "Elevated Model Evidence"
+    },
+    {
+      "id": "EC-03",
+      "desc": "p_model = 0.156741 (Sub-threshold boundary: \u03c4 - 1e-6)",
+      "p_model": 0.156741,
+      "e_model": 0.5,
+      "q_overall": 1.0,
+      "raw_isi": 48.1,
+      "clamped_isi": 48,
+      "state": "Normal / Stable"
+    },
+    {
+      "id": "EC-04",
+      "desc": "p_model = 0.156743 (Post-threshold boundary: \u03c4 + 1e-6)",
+      "p_model": 0.156743,
+      "e_model": 0.5,
+      "q_overall": 1.0,
+      "raw_isi": 48.1,
+      "clamped_isi": 48,
+      "state": "Elevated Model Evidence"
+    },
+    {
+      "id": "EC-05",
+      "desc": "p_model = 1.0 (Theoretical Upper Bound)",
+      "p_model": 1.0,
+      "e_model": 0.9908,
+      "q_overall": 1.0,
+      "raw_isi": 61.35,
+      "clamped_isi": 61,
+      "state": "Elevated Model Evidence"
+    },
+    {
+      "id": "EC-06",
+      "desc": "All deviations = 0 (Quiet Normative Baseline)",
+      "p_model": 0.005,
+      "e_model": 0.004,
+      "q_overall": 1.0,
+      "raw_isi": 34.71,
+      "clamped_isi": 35,
+      "state": "Normal / Stable"
+    },
+    {
+      "id": "EC-07",
+      "desc": "Maximum Allowed Deviations (All factors saturated = 1.0)",
+      "p_model": 1.0,
+      "e_model": 0.9908,
+      "q_overall": 1.0,
+      "raw_isi": 103.35,
+      "clamped_isi": 100,
+      "state": "Elevated Model Evidence"
+    },
+    {
+      "id": "EC-08",
+      "desc": "Minimum Allowed Deviations (Negative trend, min factors)",
+      "p_model": 0.0,
+      "e_model": 0.0,
+      "q_overall": 1.0,
+      "raw_isi": 25.6,
+      "clamped_isi": 26,
+      "state": "Normal / Stable"
+    },
+    {
+      "id": "EC-09",
+      "desc": "Missing Optional Input (PAT Invalid, v_pat = 0)",
+      "p_model": 0.02,
+      "e_model": 0.028,
+      "q_overall": 0.73,
+      "raw_isi": 43.46,
+      "clamped_isi": 43,
+      "state": "Normal / Stable"
+    },
+    {
+      "id": "EC-10",
+      "desc": "Poor ECG Signal Quality (Q_ecg = 0.30)",
+      "p_model": 0.05,
+      "e_model": 0.101,
+      "q_overall": 0.675,
+      "raw_isi": 37.33,
+      "clamped_isi": 37,
+      "state": "Normal / Stable"
+    },
+    {
+      "id": "EC-11",
+      "desc": "Simultaneous Poor ECG + PPG (Q_ecg=0.20, Q_ppg=0.20)",
+      "p_model": 0.1,
+      "e_model": 0.2665,
+      "q_overall": 0.23,
+      "raw_isi": 58.3,
+      "clamped_isi": 58,
+      "state": "Insufficient Signal Quality"
+    },
+    {
+      "id": "EC-12",
+      "desc": "Isolated PAT Invalidation (V_pat = 0)",
+      "p_model": 0.01,
+      "e_model": 0.0106,
+      "q_overall": 0.812,
+      "raw_isi": 34.89,
+      "clamped_isi": 35,
+      "state": "Normal / Stable"
+    },
+    {
+      "id": "EC-13",
+      "desc": "High Motion Artifact (I_motion = 0.85)",
+      "p_model": 0.04,
+      "e_model": 0.0739,
+      "q_overall": 0.355,
+      "raw_isi": 45.0,
+      "clamped_isi": 45,
+      "state": "Normal / Stable"
+    },
+    {
+      "id": "EC-14",
+      "desc": "All Signals Unavailable (Sensor Disconnected)",
+      "p_model": 0.0,
+      "e_model": 0.0,
+      "q_overall": 0.0,
+      "raw_isi": 34.6,
+      "clamped_isi": 35,
+      "state": "Insufficient Signal Quality"
+    }
+  ]
+}

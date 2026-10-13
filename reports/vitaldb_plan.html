@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>BeatAhead Implementation Document</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; line-height: 1.55; font-size: 10.5pt; margin: 0; }
+  h1 { font-size: 18pt; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 6px; page-break-after: avoid; }
+  h2 { font-size: 13pt; color: #1e3a8a; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-top: 22px; page-break-after: avoid; }
+  h3 { font-size: 11pt; color: #1d4ed8; margin-top: 16px; page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 8.5pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background-color: #0f2b48; color: #ffffff; }
+  tr:nth-child(even) { background-color: #f8fafc; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background-color: #f1f5f9; padding: 2px 4px; }
+  pre { background-color: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 6px; font-size: 8pt; line-height: 1.35; page-break-inside: avoid; }
+  blockquote { margin: 10px 0; padding: 8px 14px; background-color: #eff6ff; border-left: 4px solid #3b82f6; color: #1e40af; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>BeatAhead Cardiac Physiological ML Prototype: VitalDB Implementation Plan (Sprint 1)</h1>
+<p><strong>Document:</strong> <code>reports/vitaldb_plan.md</code><br />
+<strong>Target:</strong> Implementation Sprint 1 — VitalDB Acquisition, Inspection, &amp; Pre-Training Architecture<br />
+<strong>Date:</strong> September 2026<br />
+<strong>Status:</strong> PROPOSED PLAN (Awaiting User Review before full dataset download)  </p>
+<hr />
+<h2>1. Dataset Version, Source, and Access Architecture</h2>
+<h3>1.1 Exact Dataset Version and Provenance</h3>
+<ul>
+<li><strong>Dataset</strong>: VitalDB (A high-fidelity multi-parameter vital signs database in surgical patients).</li>
+<li><strong>Version</strong>: Version 1.0.1 (Data release 2022; packed <code>.vital</code> format v1.0.1).</li>
+<li><strong>Origin</strong>: Seoul National University Hospital (SNUH), Department of Anesthesiology and Pain Medicine.</li>
+<li><strong>Open Repository Hosting</strong>:</li>
+<li>Official API &amp; Data Portal: <code>https://api.vitaldb.net</code> / <code>https://vitaldb.net</code></li>
+<li>PhysioNet Distribution: <code>https://physionet.org/content/vitaldb/1.0.0/</code></li>
+<li><strong>License</strong>: <strong>Creative Commons Attribution 4.0 International (CC BY 4.0)</strong>. Permits academic and commercial use, analysis, and redistribution with proper attribution.</li>
+</ul>
+<h3>1.2 Access Modality</h3>
+<p>VitalDB provides two complementary access routes:
+1. <strong>REST / HTTP Open Endpoint (<code>https://api.vitaldb.net</code>)</strong>:
+   * Metadata tables:
+     * <code>https://api.vitaldb.net/cases</code> (6,388 cases, 74 clinical parameters).
+     * <code>https://api.vitaldb.net/trks</code> (486,449 track records across all cases).
+     * <code>https://api.vitaldb.net/labs</code> (928,448 laboratory measurement entries across 34 standard tests).
+   * Binary packed case records:
+     * <code>https://api.vitaldb.net/1.0.1/{caseid}.vital</code>
+2. <strong>Python Client Library (<code>vitaldb</code> v1.7.2)</strong>:
+   * Installed in the local project environment (<code>.venv</code>).
+   * Provides <code>vitaldb.VitalFile(filepath_or_url, track_names)</code> and <code>vitaldb.load_case(caseid, track_names, interval)</code>.
+   * <strong>Crucial Implementation Note</strong>: The <code>.vital</code> binary format is the authoritative time-synchronized source; all tracks in a <code>.vital</code> file share a unified hardware-synchronized timeline, preventing inter-track temporal drift.</p>
+<hr />
+<h2>2. Required Physiological Signals &amp; Monitoring Tracks</h2>
+<p>To fulfill the BeatAhead multimodal pipeline requirements without incurring excessive storage overhead, we isolate the following specific tracks:</p>
+<pre><code>+----------------------------------------------------------------------------------------------------+
+|                                    TARGET BIOSIGNAL TRACKS                                         |
++----------------------+---------------------------+---------------+---------------------------------+
+| Modality             | Exact VitalDB Track Name  | Sampling Rate | Physiological Function          |
++----------------------+---------------------------+---------------+---------------------------------+
+| 1. ECG (Waveform)    | SNUADC/ECG_II             | 500 Hz        | Primary cardiac rhythm, QRS,    |
+|                      |                           |               | ST segment, HRV metrics         |
+|    ECG (Lead V5)     | SNUADC/ECG_V5 (optional)  | 500 Hz        | Lateral myocardial ischemia     |
+|                      |                           |               | (available in 3,390 cases)      |
++----------------------+---------------------------+---------------+---------------------------------+
+| 2. PPG (Waveform)    | SNUADC/PLETH              | 500 Hz        | Peripheral microvascular volume |
+|                      |                           |               | Pulse Arrival Time (PAT), crest |
+|                      |                           |               | time, pulse wave amplitude      |
++----------------------+---------------------------+---------------+---------------------------------+
+| 3. SpO2 (Numeric)    | Solar8000/PLETH_SPO2      | ~0.5 Hz (2s)  | Continuous arterial oxygenation |
+|                      |                           |               | Desaturation episodes (&lt;90%)    |
++----------------------+---------------------------+---------------+---------------------------------+
+| 4. ST Deviation      | Solar8000/ST_II           | ~0.5 Hz (2s)  | Continuous ST segment level     |
+|    (Reference)       | Solar8000/ST_V5 (partial) |               | in millivolts/mm for validation |
++----------------------+---------------------------+---------------+---------------------------------+
+| 5. Hemodynamic Ref   | Solar8000/ART_MBP         | ~0.5 Hz (2s)  | Invasive Mean Arterial Pressure |
+|    (Hypotension)     | (or Solar8000/NIBP_MBP)   |               | Perfusion pressure ground truth |
++----------------------+---------------------------+---------------+---------------------------------+
+</code></pre>
+<h3>Cohort Track Coverage</h3>
+<ul>
+<li>Cases with <code>SNUADC/ECG_II</code>: <strong>6,355 / 6,388 (99.5%)</strong></li>
+<li>Cases with <code>SNUADC/PLETH</code>: <strong>6,157 / 6,388 (96.4%)</strong></li>
+<li>Cases with <code>Solar8000/PLETH_SPO2</code>: <strong>6,386 / 6,388 (99.9%)</strong></li>
+<li>Cases with <code>Solar8000/ST_II</code>: <strong>5,978 / 6,388 (93.6%)</strong></li>
+<li><strong>Simultaneous Intersection (<code>ECG_II</code> + <code>PLETH</code> + <code>PLETH_SPO2</code> + <code>ST_II</code>)</strong>: <strong>5,755 cases (90.1%)</strong>.</li>
+</ul>
+<hr />
+<h2>3. Clinical Prediction Targets &amp; The Ground Truth Reality</h2>
+<h3>3.1 The Troponin I / Myocardial Injury Reality Check</h3>
+<blockquote>
+<p>[!IMPORTANT]
+<strong>Strict Clinical Fact</strong>: An exhaustive audit of the public open-access VitalDB repository (<code>labs.csv</code>) confirms that <strong>Troponin I (cTnI) and CK-MB are NOT included in the open public distribution</strong>. The 34 public laboratory parameters consist of standard CBC, basic chemistry, arterial blood gas, and routine coagulation tests (<code>alb</code>, <code>alt</code>, <code>aptt</code>, <code>ast</code>, <code>bun</code>, <code>cr</code>, <code>crp</code>, <code>gfr</code>, <code>gluc</code>, <code>hb</code>, <code>hct</code>, <code>k</code>, <code>lac</code>, <code>na</code>, <code>ph</code>, <code>plt</code>, <code>ptinr</code>, etc.).</p>
+<p>Studies in the medical literature evaluating "MINS" (Myocardial Injury after Noncardiac Surgery) using Seoul National University Hospital data were conducted by the hospital's clinical staff who possessed internal, institutional Electronic Medical Record (EMR) linkages that are not published openly to preserve patient de-identification.</p>
+</blockquote>
+<h3>3.2 How We Will Handle Myocardial Injury Labels Without "Inventing" Data</h3>
+<p>In strict accordance with the project directives (<em>"Do not invent missing labels or claim clinical relevance that the dataset does not actually support"</em>):</p>
+<ol>
+<li><strong>Pipeline Label Schema (Forward Compatibility)</strong>:
+   * We write the label construction architecture to accept an external <code>troponin_outcomes.csv</code> table if institutional access or an authorized supplementary file is subsequently obtained.
+   * Construction rule: A binary label <code>MINS_positive = 1</code> defined by Fourth Universal Definition of Myocardial Infarction / MINS criteria: post-operative $\text{cTnI} \ge 0.04\text{ ng/mL}$ (or assay 99th percentile URL) within 30 days post-surgery, with baseline pre-operative value subtracted.</li>
+<li><strong>Immediate Investigational Targets Supported by Public Ground Truth</strong>:
+   For Sprint 1, we formulate two defensible, clinically grounded prediction targets natively supported by the open VitalDB signals:</li>
+</ol>
+<ul>
+<li><strong>Target 1: Continuous Intraoperative Ischemic ST Deviation (Primary Electrophysiological Target)</strong><ul>
+<li><em>Definition</em>: Episodes of clinically significant ST-segment depression ($\le -0.1\text{ mV} / -1.0\text{ mm}$) or elevation ($\ge +0.1\text{ mV} / +1.0\text{ mm}$) lasting $\ge 60\text{ seconds}$ on Lead II (<code>Solar8000/ST_II</code>) cross-validated by automated morphological feature extraction on high-resolution <code>SNUADC/ECG_II</code>.</li>
+<li><em>Clinical Relevance</em>: Intraoperative ST-segment depression is the classic electrophysiological sign of subendocardial myocardial ischemia induced by supply-demand mismatch during surgery.</li>
+</ul>
+</li>
+<li><strong>Target 2: Acute Myocardial Hypoperfusion / Severe Intraoperative Hypotension (Hemodynamic Target)</strong><ul>
+<li><em>Definition</em>: Episodes of Mean Arterial Pressure (MAP) $&lt; 65\text{ mmHg}$ for $\ge 5\text{ consecutive minutes}$ (or cumulative MAP $&lt; 65\text{ mmHg}$ area under the curve), which is the validated clinical threshold for end-organ hypoperfusion and myocardial ischemic stress.</li>
+</ul>
+</li>
+<li><strong>Target 3: In-Hospital Mortality &amp; High-Risk Cardiac Subgroup Stratification</strong><ul>
+<li><em>Definition</em>: Binary in-hospital mortality (<code>death_inhosp == 1</code>) and prolonged ICU stay (<code>icu_days &gt; 0</code>), stratified by patients with preoperative coronary artery disease (<code>dx</code> / <code>opname</code> containing CAD/CABG, $N=91$).</li>
+</ul>
+</li>
+</ul>
+<hr />
+<h2>4. Time Relationship: Physiological Feature Windows vs. Prediction Horizon</h2>
+<p>To evaluate the predictive early-warning capacity of BeatAhead’s multimodal pipeline, we establish a sliding window early-warning architecture:</p>
+<pre><code>+----------------------------------------------------------------------------------------------------+
+|                                    TEMPORAL WINDOWING SCHEMA                                       |
++----------------------------------------------------------------------------------------------------+
+
+   [  Observation / Feature Window  ] ---- [ Lead Time / Prediction Gap ] ---- [   Target Horizon   ]
+   &lt;----------- T_obs --------------&gt;      &lt;------------- T_lead -------&gt;      &lt;------- T_target ----&gt;
+   e.g., 5 minutes (300 s)                 e.g., 5 minutes (300 s)             e.g., 5–10 min window
+   - Extract Multimodal Features:          No data used from this period       Evaluate outcome:
+     * ECG: HRV, ST level, QRS width       to ensure true early warning        * ST depression &gt;= 0.1 mV
+     * PPG: PAT, crest time, amplitude                                         * MAP &lt; 65 mmHg
+     * SpO2: mean, nadir, desat slope                                          (Binary Label: 0 or 1)
+   --------------------------------------------------------------------------------------------------&gt; Time (t)
+   Window Step Size (Stride): 60 seconds
+</code></pre>
+<ul>
+<li><strong>Observation Window ($T_{\text{obs}}$)</strong>: 5 minutes (300 seconds). Captures sufficient cardiac cycles for stable frequency-domain HRV (VLF/LF/HF) and pulse arrival time (PAT) statistics.</li>
+<li><strong>Prediction Horizon / Lead Gap ($T_{\text{lead}}$)</strong>: 5 to 10 minutes prior to event onset.</li>
+<li><strong>Target Event ($T_{\text{target}}$)</strong>: Occurrence of sustained ischemic ST deviation or hemodynamic collapse.</li>
+<li><strong>Exclusion Buffer</strong>: Any window overlapping with the active event or occurring within 5 minutes after event resolution is excluded from baseline training to prevent label leakage.</li>
+</ul>
+<hr />
+<h2>5. Subject-Level Train / Validation / Test Splitting</h2>
+<blockquote>
+<p>[!WARNING]
+<strong>Data Leakage Prevention</strong>: In time-series physiological data with sliding windows, naive random window-level splitting causes catastrophic data leakage (neighboring windows from the same patient share identical baseline physiology).</p>
+</blockquote>
+<ul>
+<li><strong>Strict Subject-Level Partition</strong>:</li>
+<li>Splitting must be performed strictly on unique <code>subjectid</code> (or <code>caseid</code>, where each patient undergoes a distinct surgical procedure).</li>
+<li><strong>Split Ratios</strong>:</li>
+<li><strong>Train Set</strong>: 70% of subjects</li>
+<li><strong>Validation Set</strong>: 15% of subjects (for hyperparameter tuning and early stopping)</li>
+<li><strong>Test Set</strong>: 15% of subjects (held out, locked until final evaluation)</li>
+<li><strong>Stratification Strategy</strong>:</li>
+<li>Stratified by surgical category (<code>department</code>: General Surgery, Thoracic, Vascular, Urology, etc.), preoperative cardiovascular risk (<code>preop_htn</code>, <code>preop_dm</code>), and event prevalence to ensure balanced representation across folds.</li>
+</ul>
+<hr />
+<h2>6. Confounders: Surgery, Anesthesia, and Vasoactive Drugs</h2>
+<p>Unlike ambulatory wearable studies in resting volunteers, surgical datasets contain profound pharmacological and procedural confounders that directly affect ECG, PPG, and SpO2:</p>
+<pre><code>+----------------------------------------------------------------------------------------------------+
+|                                      CONFOUNDER TAXONOMY                                           |
++--------------------+------------------------------------+------------------------------------------+
+| Confounder Category| Specific Factors in VitalDB        | Impact on Biosignals &amp; Mitigations       |
++--------------------+------------------------------------+------------------------------------------+
+| 1. Vasoactive Drugs| Phenylephrine (`intraop_phe`),     | Causes acute peripheral vasoconstriction,|
+|    (Vasopressors / | Ephedrine (`intraop_eph`),         | damping PPG amplitude and shortening PAT |
+|     Inotropes)     | Epinephrine (`intraop_epi`),       | without myocardial recovery.             |
+|                    | Norepinephrine infusion            | *Mitigation*: Track drug bolus/infusion  |
+|                    |                                    | timestamps as explicit control covariates|
++--------------------+------------------------------------+------------------------------------------+
+| 2. Anesthetic      | Propofol (`intraop_ppf`),          | Profound vasodilation, blunt autonomic   |
+|    Agents          | Volatile agents (Sevoflurane,      | response (suppressed HRV LF/HF power),   |
+|                    | Desflurane), Remifentanil          | resting bradycardia.                     |
++--------------------+------------------------------------+------------------------------------------+
+| 3. Surgical &amp;      | Electrocautery (Bovie RF knives),  | Massive high-frequency electrical noise  |
+|    Mechanical      | Laparoscopic insufflation (Pneumo- | and mechanical baseline wander;          |
+|    Artifacts       | peritoneum), Patient repositioning | false ST segment spikes.                 |
+|                    |                                    | *Mitigation*: Automated SQI gating.      |
++--------------------+------------------------------------+------------------------------------------+
+| 4. Ventilatory     | Mechanical positive pressure       | Produces periodic respiratory variations |
+|    Interactions    | ventilation (10–14 breaths/min)    | in PPG pulse amplitude (Pulse Pressure   |
+|                    |                                    | Variation - PPV) and HRV.                |
++--------------------+------------------------------------+------------------------------------------+
+</code></pre>
+<hr />
+<h2>7. Missing-Data Handling &amp; Imputation Policy</h2>
+<ol>
+<li><strong>Signal Disconnections &amp; Lead Dropouts</strong>:
+   * Continuous waveforms (<code>SNUADC/ECG_II</code>, <code>SNUADC/PLETH</code>) with $&gt;10\%$ missing samples within a 5-minute analysis window are flagged as unrecoverable and the window is dropped.
+   * Short transient dropouts ($&lt;0.5\text{ s}$ / 250 samples) are interpolated using linear or cubic spline interpolation.</li>
+<li><strong>Numeric Time-Series Gaps (<code>PLETH_SPO2</code>, <code>ST_II</code>)</strong>:
+   * Stored at 2-second nominal resolution. Missing observations within valid operational periods are forward-filled up to a maximum threshold of 10 seconds; beyond 10 seconds, the window is deemed corrupted.</li>
+<li><strong>Preoperative Covariates</strong>:
+   * Continuous lab covariates (<code>preop_hb</code>, <code>preop_cr</code>) with missing values are imputed using median values conditioned on age, sex, and ASA physical status. Categorical history indicators (<code>preop_htn</code>, <code>preop_dm</code>) default to 0 (unrecorded/negative).</li>
+</ol>
+<hr />
+<h2>8. Signal Quality Checks (SQI) Architecture</h2>
+<p>To prevent corrupted biosignals from generating erroneous physiological features, all windows pass through a sequential quality filter:</p>
+<pre><code>Raw Biosignal Window (5 min)
+   |
+   v
+[ Step 1: Range &amp; Saturation Check ] 
+   - ECG clipping at rail voltages (|V| &gt; 5.0 mV)
+   - PPG flatline (variance &lt; 1e-4) or saturation at ADC bounds
+   - SpO2 outside physiological limits (&lt;50% or &gt;100%)
+   |
+   +---&gt; FAIL ---&gt; Drop window / Flag SQI = 0
+   |
+   v PASS
+[ Step 2: Morphological Consistency &amp; QRS Detection ]
+   - Pan-Tompkins / Hamilton QRS detector on ECG
+   - Detect physiological HR: 30 bpm &lt;= HR &lt;= 220 bpm
+   - Maximum allowable R-R jump: |RR_{i} - RR_{i-1}| &lt; 0.6 * RR_{i-1} (unless ectopic)
+   |
+   +---&gt; FAIL ---&gt; Drop window / Flag SQI = 0
+   |
+   v PASS
+[ Step 3: Multimodal Beat-to-Pulse Temporal Alignment ]
+   - For every detected ECG R-peak, locate corresponding PPG systolic peak
+   - Pulse Arrival Time (PAT) plausibility check: 100 ms &lt;= PAT &lt;= 450 ms
+   - If &lt;70% of heartbeats have valid corresponding PPG pulses, reject window
+   |
+   v PASS
+[ Window Approved for Feature Extraction (SQI = 1) ]
+</code></pre>
+<hr />
+<h2>9. Estimated Storage Requirements &amp; Infrastructure Budget</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Asset</th>
+<th style="text-align: left;">Scope</th>
+<th style="text-align: left;">Unit Size</th>
+<th style="text-align: left;">Total Estimated Size</th>
+<th style="text-align: left;">Strategy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Metadata CSVs</strong> (<code>cases</code>, <code>trks</code>, <code>labs</code>)</td>
+<td style="text-align: left;">Full 6,388 cases</td>
+<td style="text-align: left;">~10–35 MB each</td>
+<td style="text-align: left;"><strong>~60 MB total</strong></td>
+<td style="text-align: left;">Downloaded once into <code>data/metadata/</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Raw Binary Files</strong> (<code>.vital</code> full archive)</td>
+<td style="text-align: left;">Full 6,388 cases</td>
+<td style="text-align: left;">~16.7 MB avg</td>
+<td style="text-align: left;"><strong>~107 GB</strong></td>
+<td style="text-align: left;"><strong>Do NOT download in bulk</strong></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Filtered Pilot Cohort</strong> (<code>.vital</code>)</td>
+<td style="text-align: left;">20 selected cases</td>
+<td style="text-align: left;">~16.7 MB avg</td>
+<td style="text-align: left;"><strong>~335 MB</strong></td>
+<td style="text-align: left;">Downloaded for local pipeline validation</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Extracted Multi-track Arrays</strong> (ECG, PPG, SpO2, ST)</td>
+<td style="text-align: left;">Pilot (20 cases)</td>
+<td style="text-align: left;">~10 MB Parquet/NPY</td>
+<td style="text-align: left;"><strong>~200 MB</strong></td>
+<td style="text-align: left;">Resampled &amp; compressed locally</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Extracted Feature Windows</strong> (Tabular)</td>
+<td style="text-align: left;">Pilot (20 cases)</td>
+<td style="text-align: left;">~1 MB CSV/Parquet</td>
+<td style="text-align: left;"><strong>~20 MB</strong></td>
+<td style="text-align: left;">Final XGBoost-ready training matrix</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>10. Pilot-Cohort Strategy (Before Full Dataset Ingestion)</h2>
+<p>To guarantee software robustness, pipeline correctness, and zero storage exhaustion, we implement a <strong>staged 3-phase rollout</strong>:</p>
+<h3>Phase 1: Pilot Cohort Selection ($N = 20\text{ cases}$)</h3>
+<ul>
+<li>Criteria:
+  1. Complete presence of all required tracks: <code>SNUADC/ECG_II</code>, <code>SNUADC/PLETH</code>, <code>Solar8000/PLETH_SPO2</code>, <code>Solar8000/ST_II</code>.
+  2. Balanced case duration: $2\text{ to }4\text{ hours}$ (representing standard surgical lengths, avoiding 12-hour outlier files).
+  3. Balanced event representation: 10 cases with recorded ST-segment deviations or hypotensive episodes; 10 stable control cases.</li>
+<li>Total pilot download: <strong>~335 MB</strong> (rapid, safe, low resource footprint).</li>
+</ul>
+<h3>Phase 2: Pipeline Inspection &amp; Quality Verification</h3>
+<ul>
+<li>Run <code>src/data_inspection.py</code> on the downloaded pilot cases:</li>
+<li>Validate millisecond alignment between ECG R-peaks and PPG pulses.</li>
+<li>Compute missingness percentages and confirm SQI rejection rates.</li>
+<li>Audit feature distributions (PAT, RMSSD, ST levels).</li>
+</ul>
+<h3>Phase 3: Expansion to Full Processing (Post-Review Approval)</h3>
+<ul>
+<li>Only after user review and confirmation will the automated download script process larger batches (e.g., $N=100$, then full cohort) in a streaming or batch-wise cached pipeline.</li>
+</ul>
+<hr />
+<h2>11. Sprint 1 Constraints &amp; Guardrails</h2>
+<ul>
+<li>[x] <strong>No XGBoost training</strong> executed during this sprint.</li>
+<li>[x] <strong>No synthetic data</strong> generated.</li>
+<li>[x] <strong>No invented labels</strong> (Troponin I absence explicitly documented; native continuous ST and hemodynamic ground truth targets established).</li>
+<li>[x] <strong>No ISI calculation</strong> performed yet.</li>
+<li>[x] <strong>No modification</strong> to any existing BeatAhead website repository.</li>
+</ul>
+</body>
+</html>

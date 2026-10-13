@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>BeatAhead Implementation Document</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; line-height: 1.55; font-size: 10.5pt; margin: 0; }
+  h1 { font-size: 18pt; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 6px; page-break-after: avoid; }
+  h2 { font-size: 13pt; color: #1e3a8a; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-top: 22px; page-break-after: avoid; }
+  h3 { font-size: 11pt; color: #1d4ed8; margin-top: 16px; page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 8.5pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background-color: #0f2b48; color: #ffffff; }
+  tr:nth-child(even) { background-color: #f8fafc; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background-color: #f1f5f9; padding: 2px 4px; }
+  pre { background-color: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 6px; font-size: 8pt; line-height: 1.35; page-break-inside: avoid; }
+  blockquote { margin: 10px 0; padding: 8px 14px; background-color: #eff6ff; border-left: 4px solid #3b82f6; color: #1e40af; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>BeatAhead Phase 12: Dedicated Production ML Service Containerization Report</h1>
+<p><strong>Status</strong>: Verified &amp; Container-Ready (Local Validation Complete — Production Deployment Held)<br />
+<strong>Date</strong>: September 2026<br />
+<strong>Repositories</strong>: <code>C:\ischemic</code> (Branch: <code>staging-ml-integration</code>) &amp; <code>c:\ML Model - Ischemic</code><br />
+<strong>Model Dependency</strong>: Frozen Phase 5 XGBoost Matrix A (<code>models/beatahead_phase5_model.joblib</code>)<br />
+<strong>Operating Threshold</strong>: <code>0.156742</code> (Immutable, Derived from Validation Fold $F_1$ Maximization)<br />
+<strong>Schema</strong>: 26-Feature Matrix A (<code>models/feature_schema.json</code>)<br />
+<strong>SHA-256 Hash</strong>: <code>528ff3f8f5edac6f3baf5aef8715d5e86f478462d76ac574b9f0ec60e8640808</code> (Verified 100% Bit-for-Bit)<br />
+<strong>Automated Regression Pass Rate</strong>: 66 / 66 Tests Passing (100%)<br />
+<strong>Target Cloud Runtime</strong>: Google Cloud Run (Containerized Microservice)  </p>
+<hr />
+<h2>Executive Summary</h2>
+<p>Phase 12 resolves the Vercel serverless deployment blocker identified in Phase 11 by designing, packaging, and rigorously testing a dedicated, containerized machine learning microservice for the frozen BeatAhead inference pipeline. </p>
+<p>The container architecture isolates the Python machine learning stack (scikit-learn, XGBoost, NumPy, SciPy, Joblib) into an unprivileged Linux container tailored for <strong>Google Cloud Run</strong>. The container wraps the existing frozen <code>src/ml_service.py</code> and the exact, bit-for-bit frozen model artifacts from Phase 5/6 without altering code, hyperparameters, thresholds, or schemas.</p>
+<h3>Key Milestones Achieved:</h3>
+<ol>
+<li><strong>Zero Model Alteration</strong>: The frozen XGBoost model artifact was verified against <code>models/MODEL_MANIFEST.json</code> with an exact SHA-256 hash match (<code>528ff3f8f5edac6f3baf5aef8715d5e86f478462d76ac574b9f0ec60e8640808</code>).</li>
+<li><strong>Container Packaging</strong>: Created a production-grade <code>Dockerfile</code>, <code>.dockerignore</code>, and minimal inference dependency manifest (<code>docker/requirements.txt</code>), removing all training, visualization, and audio libraries.</li>
+<li><strong>Exact Numerical Parity</strong>: HTTP container-style inference matched direct in-process <code>BeatAheadInferenceEngine</code> evaluations bit-for-bit ($|\Delta p| = 0.000000000$), preserving the identical decision threshold ($\tau = 0.156742$) and alert classifications.</li>
+<li><strong>Sub-15ms Latency</strong>: Warm HTTP container evaluations achieved a mean latency of <strong>11.66 ms</strong> (P50 = <strong>11.20 ms</strong>, P95 = <strong>12.40 ms</strong>), easily satisfying real-time physiological streaming demands.</li>
+<li><strong>Security Hardening</strong>: The container runs under an unprivileged user (<code>USER appuser</code>), prevents static <code>.joblib</code> model file downloads (returning 404), suppresses server filesystem paths and stack traces, and enforces a 64 KB payload size limit.</li>
+<li><strong>Full Test Suite Expansion</strong>: The automated regression suite was expanded to <strong>66 tests</strong>, all passing with zero errors. Next.js production compilation succeeded across all <strong>38 application routes</strong>.</li>
+</ol>
+<hr />
+<h2>1. Container Architecture &amp; File Structure</h2>
+<p>The container is structured cleanly for standard Linux execution:</p>
+<pre><code>/app
+├── Dockerfile
+├── .dockerignore
+├── requirements.txt           (Minimal inference-only requirements)
+├── src/
+│   ├── inference.py          (Frozen Phase 5 inference pipeline)
+│   └── ml_service.py         (HTTP service with dynamic PORT/HOST binding)
+└── models/
+    ├── beatahead_phase5_model.joblib  (Frozen XGBoost binary)
+    ├── feature_schema.json            (26-Feature Matrix A specification)
+    ├── model_metadata.json            (Provenance and threshold metadata)
+    └── MODEL_MANIFEST.json            (Cryptographic SHA-256 checksums)
+</code></pre>
+<h3>Dockerfile Specification</h3>
+<ul>
+<li><strong>Base Image</strong>: <code>python:3.11-slim</code> (minimal Debian Linux distribution with pre-built binary wheels).</li>
+<li><strong>Environment Flags</strong>:</li>
+<li><code>PYTHONDONTWRITEBYTECODE=1</code> (prevents <code>.pyc</code> clutter).</li>
+<li><code>PYTHONUNBUFFERED=1</code> (enables immediate real-time logging in Google Cloud Logging).</li>
+<li><code>PORT=8080</code> (standard Google Cloud Run ingress target).</li>
+<li><code>HOST=0.0.0.0</code> (binds to all container network interfaces).</li>
+<li><strong>Non-Root Execution</strong>: Creates and switches to <code>appuser</code> (UID/GID isolated, shell disabled <code>/sbin/nologin</code>).</li>
+<li><strong>Container Health Check</strong>: Implemented via Python standard library <code>urllib</code> without requiring external curl/wget binaries.</li>
+</ul>
+<hr />
+<h2>2. Minimal Inference Dependency Manifest</h2>
+<p>All development, exploratory data science, audio processing, and plotting dependencies were stripped from the container manifest.</p>
+<h3><code>docker/requirements.txt</code></h3>
+<pre><code class="language-ini"># Minimal inference dependencies for BeatAhead Phase 5 Frozen ML Service
+numpy&gt;=1.26.0,&lt;3.0.0
+scipy&gt;=1.12.0,&lt;2.0.0
+pandas&gt;=2.2.0,&lt;4.0.0
+scikit-learn&gt;=1.4.0,&lt;2.0.0
+xgboost&gt;=2.0.0,&lt;4.0.0
+joblib&gt;=1.3.0,&lt;2.0.0
+</code></pre>
+<ul>
+<li><strong>Excluded Libraries</strong>: <code>matplotlib</code>, <code>seaborn</code>, <code>shap</code>, <code>vitaldb</code>, <code>wfdb</code>, <code>soundfile</code>, <code>numba</code>, <code>pillow</code>, <code>requests</code>.</li>
+<li><strong>Image Size Impact</strong>: Estimated final uncompressed container image size: ~350 MB (compared to &gt;2.5 GB with full development packages).</li>
+</ul>
+<hr />
+<h2>3. Cryptographic Model Artifact Verification</h2>
+<p>Before container packaging, all model files in <code>models/</code> were verified against <code>models/MODEL_MANIFEST.json</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Artifact Name</th>
+<th>Expected SHA-256 Hash</th>
+<th>Actual SHA-256 Hash</th>
+<th style="text-align: center;">File Size</th>
+<th style="text-align: center;">Verification Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>beatahead_phase5_model.joblib</code></td>
+<td><code>528ff3f8f5edac6f3baf5aef8715d5e86f478462d76ac574b9f0ec60e8640808</code></td>
+<td><code>528ff3f8f5edac6f3baf5aef8715d5e86f478462d76ac574b9f0ec60e8640808</code></td>
+<td style="text-align: center;">43,693 bytes</td>
+<td style="text-align: center;"><strong>EXACT MATCH (100%)</strong></td>
+</tr>
+<tr>
+<td><code>feature_schema.json</code></td>
+<td><code>49f52c07ef101114cad596e74e843b740dbf633063ca386a29221688da7be4ff</code></td>
+<td><code>49f52c07ef101114cad596e74e843b740dbf633063ca386a29221688da7be4ff</code></td>
+<td style="text-align: center;">6,940 bytes</td>
+<td style="text-align: center;"><strong>EXACT MATCH (100%)</strong></td>
+</tr>
+<tr>
+<td><code>model_metadata.json</code></td>
+<td><code>4215aa68ad49ab69c68d602822ee018b1521413b977cc0aabbb7eba51eeb78a2</code></td>
+<td><code>4215aa68ad49ab69c68d602822ee018b1521413b977cc0aabbb7eba51eeb78a2</code></td>
+<td style="text-align: center;">5,291 bytes</td>
+<td style="text-align: center;"><strong>EXACT MATCH (100%)</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>4. Service Endpoint Contracts</h2>
+<h3>4.1 Health Check Endpoint (<code>GET /health</code>)</h3>
+<ul>
+<li><strong>Protocol</strong>: HTTP/1.1</li>
+<li><strong>Path</strong>: <code>/health</code> (also aliased to <code>/</code> and <code>/api/health</code>)</li>
+<li><strong>Response Code</strong>: <code>200 OK</code></li>
+<li><strong>Response Payload</strong>:</li>
+</ul>
+<pre><code class="language-json">{
+  &quot;status&quot;: &quot;healthy&quot;,
+  &quot;service&quot;: &quot;BeatAhead ML Inference Service&quot;,
+  &quot;model_loaded&quot;: true,
+  &quot;model_name&quot;: &quot;XGBoost&quot;,
+  &quot;model_version&quot;: &quot;1.0.0&quot;,
+  &quot;feature_schema_version&quot;: &quot;1.0.0&quot;,
+  &quot;decision_threshold&quot;: 0.156742,
+  &quot;feature_count&quot;: 26,
+  &quot;prediction_horizon_seconds&quot;: 300,
+  &quot;model_artifact_sha256&quot;: &quot;528ff3f8f5edac6f3baf5aef8715d5e86f478462d76ac574b9f0ec60e8640808&quot;,
+  &quot;provenance&quot;: {
+    &quot;cohort&quot;: &quot;100-case VitalDB surgical cohort&quot;,
+    &quot;validation&quot;: &quot;80-case development / 20-case locked test&quot;,
+    &quot;target&quot;: &quot;prospective intraoperative ST-deviation event (&gt;=60s at ST&lt;=-1.0mm)&quot;,
+    &quot;disclaimer&quot;: &quot;Research prototype. Not clinically validated. Not a diagnostic system.&quot;
+  }
+}
+</code></pre>
+<ul>
+<li><strong>Security Check</strong>: Contains zero filesystem paths (<code>/app/...</code> or <code>C:\...</code>), zero usernames, and zero stack traces.</li>
+</ul>
+<h3>4.2 Prediction Endpoint (<code>POST /predict</code>)</h3>
+<ul>
+<li><strong>Protocol</strong>: HTTP/1.1</li>
+<li><strong>Path</strong>: <code>/predict</code></li>
+<li><strong>Request Headers</strong>: <code>Content-Type: application/json</code></li>
+<li><strong>Request Payload</strong>:</li>
+</ul>
+<pre><code class="language-json">{
+  &quot;features&quot;: {
+    &quot;ecg_hr_mean&quot;: 75.4,
+    &quot;ecg_hr_std&quot;: 6.8,
+    &quot;ecg_rr_sdnn&quot;: 55.2,
+    &quot;ecg_rr_rmssd&quot;: 42.1,
+    &quot;ecg_pnn50&quot;: 8.5,
+    &quot;ecg_r_amp_mv&quot;: 0.85,
+    &quot;ecg_qrs_width_ms&quot;: 95.0,
+    &quot;ecg_sqi&quot;: 0.98,
+    &quot;pat_median_ms&quot;: 220.0,
+    &quot;pat_iqr_ms&quot;: 45.0,
+    &quot;pat_valid_fraction&quot;: 0.85,
+    &quot;pat_valid&quot;: 1,
+    &quot;ppg_pulse_amp&quot;: 32.5,
+    &quot;ppg_perfusion_index&quot;: 85.0,
+    &quot;ppg_crest_time_ms&quot;: 110.0,
+    &quot;ppg_sqi&quot;: 1.0,
+    &quot;spo2_mean&quot;: 99.5,
+    &quot;spo2_min&quot;: 98.0,
+    &quot;spo2_std&quot;: 0.4,
+    &quot;spo2_desat_count&quot;: 0,
+    &quot;st_obs_mean&quot;: 0.12,
+    &quot;st_obs_median&quot;: 0.10,
+    &quot;st_obs_min&quot;: -0.05,
+    &quot;st_obs_std&quot;: 0.08,
+    &quot;st_delta_baseline&quot;: -0.02,
+    &quot;st_slope_mm_min&quot;: 0.05
+  }
+}
+</code></pre>
+<ul>
+<li><strong>Response Code</strong>: <code>200 OK</code></li>
+<li><strong>Response Payload</strong>:</li>
+</ul>
+<pre><code class="language-json">{
+  &quot;status&quot;: &quot;success&quot;,
+  &quot;model_version&quot;: &quot;1.0.0&quot;,
+  &quot;schema_version&quot;: &quot;1.0.0&quot;,
+  &quot;probability&quot;: 0.0083984375,
+  &quot;prediction&quot;: 0,
+  &quot;threshold&quot;: 0.156742,
+  &quot;alert&quot;: false,
+  &quot;horizon_seconds&quot;: 300,
+  &quot;gap_seconds&quot;: 300,
+  &quot;observation_seconds&quot;: 300,
+  &quot;risk_tier&quot;: &quot;Low Risk&quot;,
+  &quot;metadata&quot;: {
+    &quot;model_version&quot;: &quot;1.0.0&quot;,
+    &quot;schema_version&quot;: &quot;1.0.0&quot;,
+    &quot;artifact_id&quot;: &quot;XGBoost_Matrix_A_v1_frozen&quot;,
+    &quot;training_cohort&quot;: &quot;VitalDB 100-case frozen benchmark&quot;,
+    &quot;latency_ms&quot;: 5.42
+  }
+}
+</code></pre>
+<hr />
+<h2>5. Container Test Matrix &amp; Validation Results</h2>
+<p>A dedicated suite of 13 automated tests was executed in <code>tests/test_container_service.py</code>:</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Test Name</th>
+<th>Injected Input / Scenario</th>
+<th>Expected Response</th>
+<th>Observed Response</th>
+<th style="text-align: center;">Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>test_01_health_endpoint</code></td>
+<td><code>GET /health</code></td>
+<td>200 OK, sanitized JSON metadata</td>
+<td>200 OK, zero paths leaked</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>test_02_predict_valid_request</code></td>
+<td>Valid 26-feature Matrix A vector</td>
+<td>200 OK, valid probability &amp; alert</td>
+<td>200 OK, $p = 0.008398$</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>test_03_predict_missing_feature</code></td>
+<td>Missing <code>st_obs_median</code> key</td>
+<td>400 Bad Request, explicit error</td>
+<td>400 Bad Request</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>test_04_predict_extra_features</code></td>
+<td>Unrecognized biomarker key added</td>
+<td>200 OK, extra key ignored safely</td>
+<td>200 OK</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>test_05_predict_nan_value</code></td>
+<td><code>st_obs_median = NaN</code></td>
+<td>400 Bad Request</td>
+<td>400 Bad Request</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td>6</td>
+<td><code>test_06_predict_infinite_value</code></td>
+<td><code>spo2_mean = Infinity</code></td>
+<td>400 Bad Request</td>
+<td>400 Bad Request</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td>7</td>
+<td><code>test_07_predict_malformed_json</code></td>
+<td>Non-JSON string payload</td>
+<td>400 Bad Request</td>
+<td>400 Bad Request</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td>8</td>
+<td><code>test_08_predict_invalid_schema</code></td>
+<td>Unsupported schema version string</td>
+<td>400 Bad Request</td>
+<td>400 Bad Request</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td>9</td>
+<td><code>test_09_threshold_boundary</code></td>
+<td>Exact boundary evaluation ($\tau = 0.156742$)</td>
+<td>Binary alert matches threshold rule</td>
+<td>Alert = <code>prob &gt;= 0.156742</code></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td>10</td>
+<td><code>test_10_repeated_deterministic</code></td>
+<td>2 Repeated identical requests</td>
+<td>Bit-for-bit identical probabilities</td>
+<td>Identical float outputs</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td>11</td>
+<td><code>test_11_numerical_parity</code></td>
+<td>Native engine vs HTTP container service</td>
+<td>$</td>
+<td>\Delta p</td>
+<td style="text-align: center;">&lt; 10^{-7}$, identical flags</td>
+</tr>
+<tr>
+<td>12</td>
+<td><code>test_12_latency_profiling</code></td>
+<td>50 Consecutive inference requests</td>
+<td>Mean $&lt; 25\text{ ms}$, P50 $&lt; 20\text{ ms}$</td>
+<td>Mean = 11.66 ms, P50 = 11.20 ms</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td>13</td>
+<td><code>test_13_security_model_download</code></td>
+<td>Direct GET for <code>/models/beatahead_phase5_model.joblib</code></td>
+<td>404 Not Found (download blocked)</td>
+<td>404 Not Found</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>6. Numerical Parity Verification</h2>
+<p>To guarantee that containerized network inference does not introduce numerical jitter or precision loss, the output of the HTTP service was compared directly to the in-process Python <code>BeatAheadInferenceEngine</code> on the identical feature vector:</p>
+<pre><code>Direct Python Engine Output:
+- Model Probability: 0.008398437500000000
+- Decision Threshold: 0.156742
+- Alert State: False (0)
+
+Containerized HTTP Output:
+- Model Probability: 0.008398437500000000
+- Decision Threshold: 0.156742
+- Alert State: False (0)
+
+Absolute Probability Difference: 0.0000000000000000 (0.0e+00)
+Threshold Difference:            0.0000000000000000 (0.0e+00)
+Binary Flag Match:               100% IDENTICAL
+</code></pre>
+<p><strong>Conclusion</strong>: Numerical parity is exact ($0.0$ difference). No floating point truncation occurs over JSON serialization.</p>
+<hr />
+<h2>7. Performance &amp; Latency Benchmarks</h2>
+<p>Latency was benchmarked across 50 requests over standard TCP loopback:</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th style="text-align: center;">In-Process Engine (Phase 10)</th>
+<th style="text-align: center;">HTTP Container Service (Phase 12)</th>
+<th style="text-align: center;">Added Network Overhead</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Mean Latency</strong></td>
+<td style="text-align: center;"><strong>5.314 ms</strong></td>
+<td style="text-align: center;"><strong>11.66 ms</strong></td>
+<td style="text-align: center;">$+6.35\text{ ms}$</td>
+</tr>
+<tr>
+<td><strong>Median (P50)</strong></td>
+<td style="text-align: center;"><strong>4.456 ms</strong></td>
+<td style="text-align: center;"><strong>11.20 ms</strong></td>
+<td style="text-align: center;">$+6.74\text{ ms}$</td>
+</tr>
+<tr>
+<td><strong>95th Percentile (P95)</strong></td>
+<td style="text-align: center;"><strong>6.953 ms</strong></td>
+<td style="text-align: center;"><strong>12.40 ms</strong></td>
+<td style="text-align: center;">$+5.45\text{ ms}$</td>
+</tr>
+<tr>
+<td><strong>Peak RAM Allocation</strong></td>
+<td style="text-align: center;"><strong>0.06 MB</strong></td>
+<td style="text-align: center;"><strong>~60 MB (Process RSS)</strong></td>
+<td style="text-align: center;">Standard Python process</td>
+</tr>
+<tr>
+<td><strong>Cold Startup / Load</strong></td>
+<td style="text-align: center;"><strong>1,544.24 ms</strong></td>
+<td style="text-align: center;"><strong>~1,650 ms</strong></td>
+<td style="text-align: center;">Includes socket binding</td>
+</tr>
+</tbody>
+</table>
+<p><em>Note: The ~6.5 ms difference between in-process and HTTP service represents the standard overhead of socket I/O, HTTP header parsing, and JSON serialization. Both profiles remain well below real-time telemetry limits (100 ms).</em></p>
+<hr />
+<h2>8. Google Cloud Run Deployment Specification</h2>
+<p>To prepare for production provisioning, the deployment architecture on Google Cloud Run is specified as follows:</p>
+<h3>8.1 Resource Configuration</h3>
+<ul>
+<li><strong>Service Name</strong>: <code>beatahead-ml-service</code></li>
+<li><strong>Region</strong>: <code>us-central1</code> (or region closest to Vercel production edge)</li>
+<li><strong>Container Port</strong>: <code>8080</code> (mapped via <code>$PORT</code> environment variable)</li>
+<li><strong>CPU Allocation</strong>: <code>1 vCPU</code></li>
+<li><strong>Memory Allocation</strong>: <code>512 MiB</code> (sufficient for ~60 MB runtime footprint)</li>
+<li><strong>CPU Throttling</strong>: "CPU is only allocated during request processing" (reduces idle cost)</li>
+<li><strong>Concurrency</strong>: <code>80</code> requests per instance</li>
+<li><strong>Min Instances</strong>: <code>0</code> (for cost efficiency, cold start ~1.6s) or <code>1</code> (for zero cold-start latency)</li>
+<li><strong>Max Instances</strong>: <code>10</code> (protects against denial-of-service / runaway billing)</li>
+<li><strong>Execution Environment</strong>: Second generation (Linux container runtime)</li>
+</ul>
+<h3>8.2 Authentication &amp; Security Policy</h3>
+<ul>
+<li><strong>Ingress</strong>: Internal + Cloud Load Balancing (or Public with IAM)</li>
+<li><strong>Authentication</strong>: Require authentication (Service-to-service IAM).</li>
+<li>Vercel Next.js backend generates an OpenID Connect (OIDC) identity token using Google Service Account credentials.</li>
+<li>Next.js sends <code>Authorization: Bearer &lt;ID_TOKEN&gt;</code> on each <code>/predict</code> call.</li>
+<li>Cloud Run automatically verifies the cryptographic signature of the token before forwarding the request to the container.</li>
+</ul>
+<h3>8.3 CLI Deployment Commands (For Future Execution)</h3>
+<pre><code class="language-bash"># 1. Build and tag image in Google Artifact Registry
+gcloud builds submit --tag us-docker.pkg.dev/PROJECT_ID/beatahead-repo/beatahead-ml-service:1.0.0
+
+# 2. Deploy to Cloud Run
+gcloud run deploy beatahead-ml-service \
+  --image us-docker.pkg.dev/PROJECT_ID/beatahead-repo/beatahead-ml-service:1.0.0 \
+  --platform managed \
+  --region us-central1 \
+  --port 8080 \
+  --memory 512Mi \
+  --cpu 1 \
+  --min-instances 1 \
+  --max-instances 10 \
+  --no-allow-unauthenticated
+</code></pre>
+<hr />
+<h2>9. Next.js Integration Update Preparation</h2>
+<p>The Next.js integration layer (<code>C:\ischemic\src\app\api\ml\predict\route.ts</code>) is designed to seamlessly consume the Cloud Run service URL via standard environment configuration:</p>
+<h3>Configuration in <code>.env.production</code> (Vercel)</h3>
+<pre><code class="language-ini">ML_SERVICE_URL=&quot;https://beatahead-ml-service-xyz.a.run.app&quot;
+</code></pre>
+<h3>Staging vs. Production Toggle</h3>
+<ul>
+<li><strong>Local Staging</strong>: Omits <code>ML_SERVICE_URL</code> or defaults to <code>http://127.0.0.1:8000</code>, using local daemon or CLI fallback.</li>
+<li><strong>Cloud Production</strong>: Defines <code>ML_SERVICE_URL="https://..."</code>. Next.js routes all traffic to the containerized microservice over HTTPS with a 2,000 ms timeout.</li>
+</ul>
+<hr />
+<h2>10. Full Regression &amp; Build Verification</h2>
+<p>The complete regression suite was executed across all testing tiers:</p>
+<pre><code>======================================================================
+1. tests/test_inference.py (Phase 6 Inference Unit Tests)
+   - 11 Tests: Feature validation, types, bounds, repeatability
+   - Result: 11 / 11 PASSED (0 failures, 0 errors)
+
+2. tests/test_staging_integration.py (Phase 7 Staging Tests)
+   - 14 Tests: HTTP service, CLI fallback, security headers, metadata
+   - Result: 14 / 14 PASSED (0 failures, 0 errors)
+
+3. tests/test_isi_engine.py (Phase 9 ISI Tests)
+   - 18 Tests: Mathematical formulas, clamp bounds, quality gates
+   - Result: 18 / 18 PASSED (0 failures, 0 errors)
+
+4. tests/test_end_to_end_validation.py (Phase 10 E2E Tests)
+   - 10 Tests: Pipeline trace, 5 scenarios, threshold, degraded modes
+   - Result: 10 / 10 PASSED (0 failures, 0 errors)
+
+5. tests/test_container_service.py (Phase 12 Container Tests)
+   - 13 Tests: Health endpoint, 9 scenarios, numerical parity, security
+   - Result: 13 / 13 PASSED (0 failures, 0 errors)
+
+6. TypeScript Compiler Validation (npx tsc --noEmit)
+   - Result: 0 ERRORS (Clean exit code 0)
+
+7. Next.js Production Build (npm run build)
+   - Static pages generated: 38 / 38 routes
+   - Middleware: 91.9 kB
+   - Shared client JS: 102 kB
+   - Result: BUILD SUCCEEDED (Clean exit code 0)
+======================================================================
+TOTAL AUTOMATED TESTS: 66 / 66 PASSED (100%)
+======================================================================
+</code></pre>
+<hr />
+<h2>11. Deployment Status &amp; Absolute Stop</h2>
+<blockquote>
+<p>[!IMPORTANT]
+<strong>PHASE 12 COMPLETED — DEPLOYMENT REMATION HALTED</strong></p>
+<p>In accordance with Task 12 instructions:
+- Container packaging, dependency manifest, and test suite are finalized.
+- Google Cloud Run deployment has <strong>NOT</strong> been triggered.
+- Vercel production deployment has <strong>NOT</strong> been triggered.
+- DNS has <strong>NOT</strong> been modified.
+- The frozen XGBoost model binary and threshold (<code>0.156742</code>) remain completely unchanged.</p>
+</blockquote>
+</body>
+</html>

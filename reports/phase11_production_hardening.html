@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>BeatAhead Implementation Document</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; line-height: 1.55; font-size: 10.5pt; margin: 0; }
+  h1 { font-size: 18pt; color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 6px; page-break-after: avoid; }
+  h2 { font-size: 13pt; color: #1e3a8a; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-top: 22px; page-break-after: avoid; }
+  h3 { font-size: 11pt; color: #1d4ed8; margin-top: 16px; page-break-after: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 8.5pt; page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background-color: #0f2b48; color: #ffffff; }
+  tr:nth-child(even) { background-color: #f8fafc; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background-color: #f1f5f9; padding: 2px 4px; }
+  pre { background-color: #0f172a; color: #e2e8f0; padding: 10px; border-radius: 6px; font-size: 8pt; line-height: 1.35; page-break-inside: avoid; }
+  blockquote { margin: 10px 0; padding: 8px 14px; background-color: #eff6ff; border-left: 4px solid #3b82f6; color: #1e40af; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>BeatAhead Phase 11: Production Deployment Hardening &amp; Architectural Audit Report</h1>
+<p><strong>Status</strong>: Audit Complete — Production Deployment HELD (Blocker Identified)<br />
+<strong>Date</strong>: September 2026<br />
+<strong>Repositories</strong>: <code>C:\ischemic</code> (Branch: <code>staging-ml-integration</code>) &amp; <code>c:\ML Model - Ischemic</code><br />
+<strong>Model Dependency</strong>: Frozen Phase 5 XGBoost Matrix A (<code>models/beatahead_phase5_model.joblib</code>)<br />
+<strong>Operating Threshold</strong>: <code>0.156742</code> (Immutable, Derived from Validation Fold $F_1$ Maximization)<br />
+<strong>Schema</strong>: 26-Feature Matrix A (<code>models/feature_schema.json</code>)<br />
+<strong>Automated Regression Pass Rate</strong>: 53 / 53 Tests Passing (100%)<br />
+<strong>Production Deployment Decision</strong>: <strong>BLOCKED (Vercel Serverless ML Architecture Incompatibility)</strong>  </p>
+<hr />
+<h2>Executive Summary</h2>
+<p>Phase 11 performed a formal production deployment hardening, environmental security audit, and runtime architecture evaluation of the BeatAhead platform. The objective was to ascertain whether the current staging integration—which successfully pairs the Next.js web application (<code>C:\ischemic</code>) with the frozen Python machine learning inference service—is operationally viable for direct serverless deployment to Vercel.</p>
+<h3>Key Finding: Deployment Blocker Identified</h3>
+<p>A <strong>critical architectural blocker</strong> was identified: The Next.js staging integration in <code>src/app/api/ml/predict/route.ts</code> relies on connecting to a persistent local Python daemon (<code>http://127.0.0.1:8000</code>) and falls back to a synchronous child process invocation (<code>execFileSync</code>) pointing to local Windows directory paths (<code>C:\ML Model - Ischemic\.venv\Scripts\python.exe</code>). </p>
+<p>In a standard Vercel production deployment:
+1. <strong>No Persistent Daemon</strong>: Vercel executes Next.js API routes inside ephemeral, stateless Linux serverless microVMs; <code>127.0.0.1:8000</code> does not exist and connections will be immediately refused (<code>ECONNREFUSED</code>).
+2. <strong>Local Path Invalidation</strong>: The fallback paths (<code>C:\ML Model - Ischemic\...</code>) do not exist in the Linux container filesystem (<code>/var/task/</code>).
+3. <strong>Missing Python ML Environment</strong>: The standard Vercel Node.js runtime does not bundle Python, XGBoost, Scikit-learn, Joblib, or NumPy.</p>
+<p>Therefore, <strong>direct deployment to Vercel (<code>vercel --prod</code>) will fail at the inference boundary</strong>. In accordance with Phase 11 instructions, this blocker is explicitly recorded and production deployment is strictly <strong>HALTED</strong>.</p>
+<hr />
+<h2>1. Deployment Architecture Audit (Task 1)</h2>
+<h3>Current Staging Data Flow</h3>
+<pre><code>[ User Browser / Client ]
+           │
+           │ HTTPS POST /api/ml/predict (JSON payload: 26 features)
+           ▼
+[ Next.js Server / API Gateway (route.ts) ]
+           │
+           ├── (Step 1) Validates payload: 26 canonical features, bounds, NaN rejection
+           │
+           ├── (Step 2: Primary) Attempts fetch(&quot;http://127.0.0.1:8000/predict&quot;)
+           │           │
+           │           └── [ Python HTTP Daemon (src/ml_service.py) ]
+           │                     └── Evaluates beatahead_phase5_model.joblib
+           │
+           └── (Step 3: Staging Fallback) If daemon down:
+                       └── execFileSync(&quot;C:\\ML Model - Ischemic\\.venv\\Scripts\\python.exe&quot;,
+                                        [&quot;C:\\ML Model - Ischemic\\src\\ml_service.py&quot;, &quot;--cli&quot;])
+</code></pre>
+<h3>Failure Mechanism on Vercel Production</h3>
+<p>When deployed to Vercel without external service provisioning:
+- <strong><code>fetch("http://127.0.0.1:8000/predict")</code></strong>: Times out or throws <code>fetch failed (ECONNREFUSED)</code>.
+- <strong><code>execFileSync("C:\\ML Model - Ischemic...")</code></strong>: Throws <code>ENOENT</code> (path not found) or <code>EACCES</code> on Linux.
+- <strong>Frontend User Experience</strong>: Returns <code>503 Service Unavailable</code> with sanitized error code <code>ML_SERVICE_ERROR</code>. The web dashboard safely suppresses predictions, but live inference becomes non-functional.</p>
+<hr />
+<h2>2. Production ML Architecture Options Evaluation (Task 2)</h2>
+<p>Four production architectural options were evaluated:</p>
+<table>
+<thead>
+<tr>
+<th>Architecture Option</th>
+<th>Description</th>
+<th style="text-align: center;">Technical Feasibility</th>
+<th style="text-align: center;">Model Invariance</th>
+<th style="text-align: center;">Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Option A: Dedicated Python Container</strong></td>
+<td>Deploy <code>src/ml_service.py</code> to a dedicated container runtime (e.g., AWS ECS, Google Cloud Run, Fly.io, Railway, or AWS Lambda with Container Image). Next.js on Vercel connects via <code>ML_SERVICE_URL=https://ml.beatahead.internal/predict</code>.</td>
+<td style="text-align: center;"><strong>High</strong></td>
+<td style="text-align: center;">100% Unchanged (<code>beatahead_phase5_model.joblib</code>)</td>
+<td style="text-align: center;"><strong>RECOMMENDED FOR PRODUCTION</strong></td>
+</tr>
+<tr>
+<td><strong>Option B: Vercel Python Serverless Function</strong></td>
+<td>Reconfigure the repo to expose a native Vercel Python Serverless Function (<code>api/predict.py</code>). Bundles Python requirements (<code>requirements.txt</code>).</td>
+<td style="text-align: center;"><strong>Medium / High Risk</strong></td>
+<td style="text-align: center;">100% Unchanged</td>
+<td style="text-align: center;"><strong>WARNING</strong>: Heavy ML dependencies (<code>scikit-learn</code>, <code>xgboost</code>, <code>scipy</code>, <code>numpy</code>) often exceed Vercel's 250 MB unzipped function size limit.</td>
+</tr>
+<tr>
+<td><strong>Option C: Runtime Export (ONNX / Treelite)</strong></td>
+<td>Convert frozen XGBoost tree ensemble into ONNX or compile to native C/WASM/Node.js library for in-process execution without Python.</td>
+<td style="text-align: center;"><strong>Technical Work Required</strong></td>
+<td style="text-align: center;">Requires formal numerical equivalence audit</td>
+<td style="text-align: center;"><strong>HOLD</strong>: Phase 11 prohibits model conversion without explicit authorization.</td>
+</tr>
+<tr>
+<td><strong>Option D: Staging-Only ML Boundary</strong></td>
+<td>Keep Python ML inference strictly in local staging/simulation; deploy website with simulated physiological telemetry.</td>
+<td style="text-align: center;"><strong>Immediate</strong></td>
+<td style="text-align: center;">100% Unchanged</td>
+<td style="text-align: center;"><strong>VIABLE FOR DEMO ONLY</strong>: Does not support live hardware inference in production.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>3. Model Artifact Security Audit (Task 3)</h2>
+<p>The project filesystem and compilation artifacts were inspected to prevent intellectual property exposure or data leakage:</p>
+<table>
+<thead>
+<tr>
+<th>Security Check</th>
+<th>Verification Method</th>
+<th>Observed Result</th>
+<th style="text-align: center;">Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Public Folder Isolation</strong></td>
+<td>Searched <code>C:\ischemic\public\</code> for <code>*.joblib</code>, <code>*.pkl</code>, <code>*.pt</code></td>
+<td>0 Model artifacts found</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Client Bundle Isolation</strong></td>
+<td>Searched <code>C:\ischemic\.next\</code> static chunks for model binaries</td>
+<td>0 Model artifacts bundled</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Direct Download Prevention</strong></td>
+<td>Attempted HTTP GET for model binary paths</td>
+<td>Returns 404 Not Found</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Filesystem Path Suppression</strong></td>
+<td>Tested error outputs across all API failure modes</td>
+<td>Zero paths (<code>C:\...</code>) returned in HTTP responses</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Python Stack Trace Suppression</strong></td>
+<td>Tested malformed, out-of-bounds, and crashing payloads</td>
+<td>Generic error messages returned; zero tracebacks exposed</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Metadata Protection</strong></td>
+<td>Inspected <code>models/model_metadata.json</code></td>
+<td>No secrets, credentials, or private paths stored</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>4. Environment Variables Audit (Task 4)</h2>
+<p>An audit of <code>C:\ischemic\.env.example</code> and <code>C:\ischemic\.env.local</code> was conducted to verify that no server secrets are exposed to browser clients:</p>
+<h3>Client-Accessible Variables (<code>NEXT_PUBLIC_*</code>)</h3>
+<ul>
+<li><code>NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY</code>: Public authentication key (Required for Clerk frontend SDK).</li>
+<li><code>NEXT_PUBLIC_VOICE_SERVER_WS_URL</code>: WebSocket endpoint for streaming voice assistance.</li>
+<li><strong>Audit Result</strong>: Zero secrets, database passwords, or private API keys are exposed via <code>NEXT_PUBLIC_*</code>.</li>
+</ul>
+<h3>Server-Only Secrets (Protected from Browser Client)</h3>
+<ul>
+<li><code>CLERK_SECRET_KEY</code>: Clerk backend authentication secret.</li>
+<li><code>GEMINI_API_KEY</code>: Google Gemini API key.</li>
+<li><code>GROQ_API_KEY</code>: Groq API key for low-latency STT.</li>
+<li><code>ELEVENLABS_API_KEY</code>: ElevenLabs TTS synthesis key.</li>
+<li><code>EXOTEL_API_KEY</code> &amp; <code>EXOTEL_API_TOKEN</code>: Telephony credentials.</li>
+<li><strong>Audit Result</strong>: All backend secrets are strictly restricted to Node.js server execution contexts.</li>
+</ul>
+<hr />
+<h2>5. API Security &amp; Input Validation (Task 5)</h2>
+<p>The <code>POST /api/ml/predict</code> endpoint implements strict input sanitization:
+1. <strong>Payload Type Enforcement</strong>: Rejects non-JSON payloads, arrays, and malformed strings with <code>400 Bad Request</code>.
+2. <strong>Schema Completeness</strong>: Validates that all 26 Matrix A features are present. Missing keys are rejected immediately with <code>missing_features</code> details.
+3. <strong>Strict Bounds Checking</strong>: Every numerical feature is compared against physiologically plausible human ranges (<code>FEATURE_BOUNDS</code>). Impossible heart rates (e.g. 450 bpm) or corrupted voltages are rejected with <code>400 Bad Request</code>.
+4. <strong>Non-Finite Value Rejection</strong>: <code>NaN</code>, <code>+Infinity</code>, and <code>-Infinity</code> are rejected before reaching the inference model.
+5. <strong>Timeout Protection</strong>: Upstream network requests to <code>ML_SERVICE_URL</code> enforce an explicit 2,000 ms timeout via <code>AbortController</code>, preventing worker thread exhaustion.</p>
+<hr />
+<h2>6. Failure Modes &amp; Graceful Degradation (Task 6)</h2>
+<p>The staging platform enforces fail-safe degradation across all system failure states:</p>
+<table>
+<thead>
+<tr>
+<th>Failure State</th>
+<th>Root Cause</th>
+<th>System Response</th>
+<th style="text-align: center;">Stale Output Displayed?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>ML Service Unavailable</strong></td>
+<td>Daemon stopped / container offline</td>
+<td>Returns <code>503 Service Unavailable</code>; UI displays <code>Inference Service Offline</code> banner.</td>
+<td style="text-align: center;"><strong>NEVER</strong></td>
+</tr>
+<tr>
+<td><strong>Model Initialization Failure</strong></td>
+<td>Missing artifact / permission error</td>
+<td>Returns <code>503 ML_SERVICE_ERROR</code>; logs to server console.</td>
+<td style="text-align: center;"><strong>NEVER</strong></td>
+</tr>
+<tr>
+<td><strong>Sensor Disconnection</strong></td>
+<td>Missing PPG / ECG streams</td>
+<td>$Q_{\text{overall}} &lt; 0.35$; triggers <code>Insufficient Signal Quality</code> state.</td>
+<td style="text-align: center;"><strong>NEVER</strong></td>
+</tr>
+<tr>
+<td><strong>High Motion Artifact</strong></td>
+<td>Patient walking / running ($M &gt; 0.70$)</td>
+<td>Suppresses false alarms; prompts user to stabilize sensor contact.</td>
+<td style="text-align: center;"><strong>NEVER</strong></td>
+</tr>
+<tr>
+<td><strong>Baseline Establishing</strong></td>
+<td>Monitoring time $&lt; 600\text{ s}$</td>
+<td>Holds state in <code>Baseline Establishing</code>; inhibits premature stable classification.</td>
+<td style="text-align: center;"><strong>NEVER</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>7. Production Health Check Endpoint (Task 7)</h2>
+<p>A dedicated, non-sensitive health check route was created at <code>C:\ischemic\src\app\api\ml\health\route.ts</code>.</p>
+<h3>Endpoint: <code>GET /api/ml/health</code></h3>
+<p><strong>Sample Response (JSON)</strong>:</p>
+<pre><code class="language-json">{
+  &quot;status&quot;: &quot;healthy&quot;,
+  &quot;timestamp&quot;: &quot;2026-09-22T15:20:10.123Z&quot;,
+  &quot;service&quot;: &quot;BeatAhead ML Gateway&quot;,
+  &quot;model_version&quot;: &quot;1.0.0-phase5-frozen&quot;,
+  &quot;schema_version&quot;: &quot;1.0.0&quot;,
+  &quot;decision_threshold&quot;: 0.156742,
+  &quot;selection_metric&quot;: &quot;f1_score&quot;,
+  &quot;upstream_service&quot;: {
+    &quot;status&quot;: &quot;connected&quot;,
+    &quot;configured_url&quot;: true,
+    &quot;details&quot;: {
+      &quot;model_loaded&quot;: true,
+      &quot;features_count&quot;: 26
+    }
+  }
+}
+</code></pre>
+<p><strong>Security Characteristics</strong>:
+- No filesystem paths (<code>C:\...</code> or <code>/var/...</code>) are exposed.
+- No server usernames or process IDs are returned.
+- If the upstream Python daemon is unreachable, the endpoint cleanly reports <code>"status": "degraded"</code> with <code>"upstream_service.status": "unreachable"</code> without crashing.</p>
+<hr />
+<h2>8. Deployment Configuration Audit (Task 8)</h2>
+<table>
+<thead>
+<tr>
+<th>Configuration Item</th>
+<th>File Path</th>
+<th>Current Value</th>
+<th>Production Impact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Node.js Target</strong></td>
+<td><code>package.json</code></td>
+<td>Next.js 15.1.0, React 19.0.0</td>
+<td>Compatible with Vercel Node 20.x runtime.</td>
+</tr>
+<tr>
+<td><strong>Build Command</strong></td>
+<td><code>package.json</code></td>
+<td><code>next build</code></td>
+<td>Compiles cleanly across 38 routes in 9.0s.</td>
+</tr>
+<tr>
+<td><strong>TypeScript Config</strong></td>
+<td><code>tsconfig.json</code></td>
+<td>Strict mode enabled</td>
+<td>0 Errors across codebase (<code>tsc --noEmit</code>).</td>
+</tr>
+<tr>
+<td><strong>Hardcoded Windows Paths</strong></td>
+<td><code>src/app/api/ml/predict/route.ts</code></td>
+<td><code>C:\\ML Model - Ischemic</code></td>
+<td><strong>DEPLOYMENT BLOCKER</strong> on Linux serverless.</td>
+</tr>
+<tr>
+<td><strong>Localhost Coupling</strong></td>
+<td><code>src/app/api/ml/predict/route.ts</code></td>
+<td><code>http://127.0.0.1:8000</code></td>
+<td><strong>DEPLOYMENT BLOCKER</strong> without external host.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>9. Performance Latency Profile (Task 9)</h2>
+<p>In accordance with Phase 11 guidelines, cold-start initialization is strictly distinguished from warm in-process inference latency:</p>
+<table>
+<thead>
+<tr>
+<th>Operational Phase</th>
+<th style="text-align: center;">Measured Latency</th>
+<th>Explanation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Cold-Start / Initialization</strong></td>
+<td style="text-align: center;"><strong>1,544.24 ms</strong></td>
+<td>One-time overhead: Python runtime startup, Joblib file reading, deserialization of 200 XGBoost decision trees, and JSON schema parsing.</td>
+</tr>
+<tr>
+<td><strong>Warm In-Process Inference (Mean)</strong></td>
+<td style="text-align: center;"><strong>5.314 ms</strong></td>
+<td>Real-time vectorized tree evaluation across 26 features.</td>
+</tr>
+<tr>
+<td><strong>Warm In-Process Inference (P50)</strong></td>
+<td style="text-align: center;"><strong>4.456 ms</strong></td>
+<td>Median evaluation time per single-window query.</td>
+</tr>
+<tr>
+<td><strong>Warm In-Process Inference (P95)</strong></td>
+<td style="text-align: center;"><strong>6.953 ms</strong></td>
+<td>95th percentile worst-case evaluation time under concurrent load.</td>
+</tr>
+<tr>
+<td><strong>Memory Allocation</strong></td>
+<td style="text-align: center;"><strong>0.06 MB</strong></td>
+<td>Peak temporary memory allocated per inference call.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>10. Safety &amp; Regulatory Copy Audit (Task 10)</h2>
+<p>All production-facing UI pages were verified against medical device disclaimer requirements:
+- <strong>Disclaimer Visibility</strong>: All primary dashboards display the standard notice:</p>
+<blockquote>
+<p><em>"Research prototype screening system — not a medical diagnostic device. For investigational demonstration only."</em>
+- <strong>Prohibited Terminology</strong>: An automated scan confirmed <strong>0 occurrences</strong> of diagnostic assertions:
+  - <code>"heart attack detected"</code>: <strong>0 occurrences</strong>
+  - <code>"ischemia confirmed"</code>: <strong>0 occurrences</strong>
+  - <code>"clinically proven"</code>: <strong>0 occurrences</strong>
+  - <code>"diagnosis"</code>: <strong>0 occurrences in model outputs</strong>
+- <strong>Simulation Mode</strong>: The <code>SimulatedBadge</code> prominently flags simulated telemetry with <code>RESEARCH MODEL — SIMULATED INPUT</code>.</p>
+</blockquote>
+<hr />
+<h2>11. Deployment Checklist &amp; Classification Matrix (Task 11)</h2>
+<table>
+<thead>
+<tr>
+<th>Audit Item</th>
+<th>Area</th>
+<th>Evaluation Result</th>
+<th style="text-align: center;">Classification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Model Binary Immutability</strong></td>
+<td>ML Core</td>
+<td>SHA-256 hash verified; zero retraining or alteration</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Decision Threshold Freeze</strong></td>
+<td>ML Core</td>
+<td>Threshold fixed at <code>0.156742</code></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Automated Regression Suite</strong></td>
+<td>Quality Assurance</td>
+<td>53 / 53 Tests Passing</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>TypeScript Static Check</strong></td>
+<td>Frontend</td>
+<td>0 Compilation Errors</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Next.js Production Build</strong></td>
+<td>Frontend</td>
+<td>38 Routes compiled successfully</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Model Artifact Leakage</strong></td>
+<td>Security</td>
+<td>0 <code>.joblib</code> files in public or client bundles</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Environment Variable Isolation</strong></td>
+<td>Security</td>
+<td>Zero secrets in <code>NEXT_PUBLIC_*</code></td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Safety Disclaimers &amp; Copy</strong></td>
+<td>Compliance</td>
+<td>Non-diagnostic language enforced; disclaimers active</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>Health Check Route</strong></td>
+<td>Operations</td>
+<td><code>GET /api/ml/health</code> operational</td>
+<td style="text-align: center;"><strong>PASS</strong></td>
+</tr>
+<tr>
+<td><strong>External ML Service Host</strong></td>
+<td>Infrastructure</td>
+<td>Upstream service URL not yet provisioned in cloud</td>
+<td style="text-align: center;"><strong>WARNING</strong></td>
+</tr>
+<tr>
+<td><strong>Vercel Serverless Python Host</strong></td>
+<td>Architecture</td>
+<td>Vercel Node.js runtime cannot run local Python daemon</td>
+<td style="text-align: center;"><strong>BLOCKER</strong></td>
+</tr>
+<tr>
+<td><strong>Hardcoded Windows Fallback</strong></td>
+<td>Architecture</td>
+<td>Local <code>C:\...</code> paths in <code>route.ts</code> will fail on Linux</td>
+<td style="text-align: center;"><strong>BLOCKER</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>12. Deployment Decision (Task 12)</h2>
+<blockquote>
+<p>[!CAUTION]
+<strong>PRODUCTION DEPLOYMENT HALTED — BLOCKERS IDENTIFIED</strong></p>
+<p>In strict compliance with Phase 11 directives:
+- <code>vercel --prod</code> was <strong>NOT</strong> executed.
+- No production DNS or infrastructure changes were initiated.</p>
+<p><strong>Prerequisites for Future Production Release</strong>:
+1. Deploy <code>src/ml_service.py</code> to a dedicated containerized cloud service (e.g. AWS ECS, Google Cloud Run, or Railway) configured with the frozen <code>beatahead_phase5_model.joblib</code>.
+2. Set <code>ML_SERVICE_URL</code> in Vercel environment variables to point to the secure HTTPS cloud container endpoint.
+3. Remove the local Windows <code>execFileSync</code> fallback from <code>route.ts</code> before triggering the production Vercel build.</p>
+</blockquote>
+</body>
+</html>
